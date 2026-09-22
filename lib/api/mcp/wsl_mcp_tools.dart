@@ -45,6 +45,7 @@ import 'package:wsl2distromanager/api/recipes/recipe_catalog.dart';
 import 'package:wsl2distromanager/api/recipes/recipe_service.dart';
 import 'package:wsl2distromanager/api/vm/vm_backend.dart';
 import 'package:wsl2distromanager/api/vm_resize.dart';
+import 'package:wsl2distromanager/api/vm_restart.dart';
 import 'package:wsl2distromanager/api/wsl.dart';
 import 'package:wsl2distromanager/api/wsl_capabilities.dart';
 import 'package:wsl2distromanager/api/wsl_version.dart';
@@ -1423,6 +1424,96 @@ List<McpTool> _appleVmTools(AppleVmApi api) {
           await api.startHeadless(name);
         }
         return 'Started $name.';
+      },
+    ),
+    McpTool(
+      name: 'vm_stop',
+      recording: const ToolRecording(target: 'name', supporting: true),
+      description:
+          'Stop a VM. The guest is asked to power down over ACPI; one that '
+          'does not answer in time is powered off, unless force is false. '
+          'Returns once the VM is really down.',
+      inputSchema: const {
+        'type': 'object',
+        'properties': {
+          'name': {'type': 'string', 'description': 'Name of the VM.'},
+          'force': {
+            'type': 'boolean',
+            'description': 'Power the guest off when it ignores the shutdown '
+                'request. Default true.',
+          },
+        },
+        'required': ['name'],
+      },
+      handler: (args) async {
+        final name = _requireString(args, 'name');
+        final force = args['force'] != false;
+        final VmStopResult result;
+        try {
+          result = await VmRestartService(api).stop(name, force: force);
+        } on VmRestartException catch (error) {
+          throw ArgumentError(error.message);
+        }
+        if (!result.wasRunning) return '$name was already stopped.';
+        return result.forced
+            ? 'Stopped $name. It ignored the shutdown request, so it was '
+                'powered off — anything the guest had not written to disk is '
+                'gone.'
+            : 'Stopped $name.';
+      },
+    ),
+    McpTool(
+      name: 'vm_restart',
+      recording: const ToolRecording(target: 'name', supporting: true),
+      description:
+          'Restart a VM: stop it, wait until it is really down, start it '
+          'again and report the address it comes back on. Use this rather '
+          'than a stop followed by a start — a VM that is still releasing '
+          'its disk must not be started again. The usual repair for a guest '
+          'that is running but unreachable (no DHCP lease, no SSH): a guest '
+          'that ignores the shutdown request is powered off. Headless by '
+          'default; set gui to bring its display window up instead.',
+      inputSchema: const {
+        'type': 'object',
+        'properties': {
+          'name': {'type': 'string', 'description': 'Name of the VM.'},
+          'gui': {
+            'type': 'boolean',
+            'description': 'Open the VM display window. Default false.',
+          },
+          'wait_for_ip': {
+            'type': 'boolean',
+            'description': 'Wait for the guest to pick up a DHCP lease and '
+                'report it. Default true.',
+          },
+        },
+        'required': ['name'],
+      },
+      handler: (args) async {
+        final name = _requireString(args, 'name');
+        final gui = args['gui'] == true;
+        final waitForIp = args['wait_for_ip'] != false;
+        final service = VmRestartService(api);
+        final VmRestartResult result;
+        try {
+          result = await service.restart(name, gui: gui, waitForIp: waitForIp);
+        } on VmRestartException catch (error) {
+          throw ArgumentError(error.message);
+        }
+        final parts = <String>[
+          result.wasRunning
+              ? 'Restarted $name.'
+              : '$name was stopped, so it was just started.',
+          if (result.forced)
+            'It ignored the shutdown request and was powered off.',
+          if (result.ip != null) 'It is back at ${result.ip}.',
+          if (result.waitedForIp && result.ip == null)
+            'It is running but took no DHCP lease within '
+                '${service.leaseTimeout.inSeconds}s — it may still be '
+                'booting, or its network configuration is broken. Check the '
+                'serial console.',
+        ];
+        return parts.join(' ');
       },
     ),
     McpTool(

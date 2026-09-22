@@ -115,6 +115,8 @@ void main() {
             'vm_create_linux',
             'vm_create_macos',
             'vm_start',
+            'vm_stop',
+            'vm_restart',
             'vm_ip',
             'vm_import_image',
             'wsl_list_distros',
@@ -228,6 +230,53 @@ void main() {
           .firstWhere((t) => t.name == 'vm_list_images')
           .handler({});
       expect(out, contains('alpine-linux-virt'));
+    });
+
+    test('vm_restart stops, starts and reports the address', () async {
+      final shell = FakeVmctlShell();
+      shell.responses['stop'] = '{"stopped":"dev"}';
+      shell.responses['start'] = '{"started":"dev"}';
+      shell.responses['ip'] = '{"ip":"192.168.64.10"}';
+      // Running, down after the stop, up again after the start.
+      shell.responseQueue['list'] = [
+        '{"vms":[{"name":"dev","state":"running"}]}',
+        '{"vms":[{"name":"dev","state":"stopped"}]}',
+        '{"vms":[{"name":"dev","state":"running"}]}',
+      ];
+      final api = AppleVmApi(
+          shell: shell,
+          helperPathOverride: '/fake/vmctl',
+          storeDirOverride: '/tmp/vm-mcp-test',
+          earlyExitProbeDelay: Duration.zero);
+      final tools = buildWslMcpTools(api, WslTerminalManager(wslApi: api));
+
+      final out = await tools
+          .firstWhere((t) => t.name == 'vm_restart')
+          .handler({'name': 'dev'});
+
+      final vmctl = shell.calls.where((c) => c.first == '/fake/vmctl');
+      expect(vmctl.any((c) => c.contains('stop')), isTrue);
+      expect(vmctl.any((c) => c.contains('start')), isTrue);
+      expect(out, contains('Restarted dev'));
+      expect(out, contains('192.168.64.10'));
+    });
+
+    test('vm_stop leaves an already stopped VM alone', () async {
+      final shell = FakeVmctlShell();
+      shell.responses['list'] = '{"vms":[{"name":"dev","state":"stopped"}]}';
+      final api = AppleVmApi(
+          shell: shell,
+          helperPathOverride: '/fake/vmctl',
+          storeDirOverride: '/tmp/vm-mcp-test',
+          earlyExitProbeDelay: Duration.zero);
+      final tools = buildWslMcpTools(api, WslTerminalManager(wslApi: api));
+
+      final out = await tools
+          .firstWhere((t) => t.name == 'vm_stop')
+          .handler({'name': 'dev'});
+
+      expect(out, contains('already stopped'));
+      expect(shell.calls.any((c) => c.contains('stop')), isFalse);
     });
 
     test('vm_start is headless unless gui is asked for', () async {
