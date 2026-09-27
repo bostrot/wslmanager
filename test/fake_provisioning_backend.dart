@@ -9,9 +9,15 @@ import 'dart:io';
 import 'package:wsl2distromanager/api/vm/vm_backend.dart';
 
 class ScriptedBackend extends VmBackend {
-  ScriptedBackend({this.instances = const ['ubuntu', 'alpine']});
+  ScriptedBackend(
+      {this.instances = const ['ubuntu', 'alpine'],
+      this.runningInstances = const []});
 
   final List<String> instances;
+
+  /// Which of [instances] answer as running. Empty by default: a test that
+  /// cares says so.
+  List<String> runningInstances;
 
   /// Answers, one per `runInInstance` call, in order. When the queue runs
   /// dry every step answers `ok`.
@@ -35,10 +41,13 @@ class ScriptedBackend extends VmBackend {
   VmFeatures get features => const VmFeatures(quickActions: true);
 
   @override
-  Future<Instances> list(bool showDocker) async => Instances(instances, []);
+  Future<Instances> list(bool showDocker) async =>
+      Instances(instances, runningInstances);
 
+  /// Read back out of [list], so a subclass that overrides only that one
+  /// still answers both questions the same way.
   @override
-  Future<List<String>> listRunning() async => [];
+  Future<List<String>> listRunning() async => (await list(false)).running;
 
   @override
   Future<void> start(String distribution,

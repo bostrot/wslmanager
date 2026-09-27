@@ -49,6 +49,7 @@
 - [x] Copy, rename, move to another drive, back up and delete instances
 - [x] Back every instance up to one folder — with a list of what is in it — and restore them all on another PC
 - [x] Compact virtual disks to reclaim space WSL never gives back
+- [x] Watch what an instance is using right now — processor time, memory and swap, with a live graph
 - [x] Supports Ubuntu, Debian, Alpine, Kali Linux, openSUSE, SLES and anything else WSL accepts
 
 **Get instances running faster**

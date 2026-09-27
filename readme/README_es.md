@@ -50,6 +50,7 @@
 - [x] Copia, renombra, mueve a otra unidad, respalda y elimina instancias
 - [x] Guarda todas las instancias en una carpeta —con una lista de lo que contiene— y restáuralas en otro PC
 - [x] Compacta los discos virtuales para recuperar el espacio que WSL nunca devuelve
+- [x] Observa lo que una instancia está consumiendo ahora mismo: procesador, memoria e intercambio, con un gráfico en vivo
 - [x] Admite Ubuntu, Debian, Alpine, Kali Linux, openSUSE, SLES y cualquier otra cosa que WSL acepte
 
 **Poner instancias en marcha más rápido**

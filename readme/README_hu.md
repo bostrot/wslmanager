@@ -50,6 +50,7 @@
 - [x] Példányok másolása, átnevezése, másik meghajtóra helyezése, mentése és törlése
 - [x] Minden példány mentése egy mappába – a tartalom listájával együtt –, majd visszaállítás egy másik gépen
 - [x] Virtuális lemezek tömörítése, hogy visszakapd a helyet, amit a WSL sosem ad vissza
+- [x] Nézd meg, mit használ épp egy példány – processzor, memória és swap, élő grafikonnal
 - [x] Támogatja az Ubuntut, Debiant, Alpine-t, Kali Linuxot, openSUSE-t, SLES-t és mindent, amit a WSL elfogad
 
 **Gyorsabban működő példányok**

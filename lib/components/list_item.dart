@@ -21,6 +21,7 @@ import 'package:wsl2distromanager/dialogs/file_transfer_dialog.dart';
 import 'package:wsl2distromanager/dialogs/guest_access_dialog.dart';
 import 'package:wsl2distromanager/dialogs/vm_credentials_dialog.dart';
 import 'package:wsl2distromanager/dialogs/vm_resize_dialog.dart';
+import 'package:wsl2distromanager/dialogs/vm_resources_dialog.dart';
 import 'package:wsl2distromanager/dialogs/volume_mounts_dialog.dart';
 
 /// Builder for the WSL Distro List Items. Each item is an expander with [item]
@@ -462,10 +463,19 @@ class Bar extends StatelessWidget {
           borderRadius: BorderRadius.only(
               bottomLeft: Radius.circular(5.0),
               bottomRight: Radius.circular(5.0))),
+      // The hint on the left is flexible; the action strip is not. A `Row`
+      // that runs out of room neither scrolls nor wraps — it paints the
+      // overflow stripes and hides whatever is past the edge — and at the
+      // 700px minimum window `main.dart` allows, the unconstrained
+      // "no snippets yet" sentence pushed the last ~43px of the strip out
+      // of the row. Laying the strip out first and letting the sentence
+      // wrap into what is left keeps every control reachable at any window
+      // size (bostrot/ai-tasks#109).
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Builder(builder: (childcontext) {
+          Flexible(
+            child: Builder(builder: (childcontext) {
             // Quick actions are scripted in-distro commands; backends
             // without that capability get no dead dropdown or hint.
             if (!features.quickActions) return const SizedBox.shrink();
@@ -529,7 +539,7 @@ class Bar extends StatelessWidget {
                 : Text('nosnippetshint-text'.i18n(),
                     style: TextStyle(
                         fontSize: 12.0, color: secondaryTextColor(context)));
-          }),
+          })),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
@@ -697,6 +707,39 @@ class Bar extends StatelessWidget {
                             });
                       },
                     ),
+                  ),
+                ),
+              ),
+              // What the instance is using *right now*, beside what it is
+              // using on disk: the same question asked of memory and CPU
+              // instead of storage (bostrot/ai-tasks#109). Every backend
+              // runs a Linux guest it can read `/proc` in, so there is no
+              // flag to gate it on — a guest that cannot be read says so in
+              // the dialog.
+              MergeSemantics(
+                child: Tooltip(
+                  message: 'vmresources-text'.i18n(),
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: Builder(builder: (resourcesContext) {
+                      return IconButton(
+                        key: ValueKey('test-listitem-resources-${widget.item}'),
+                        // A line chart: the only graph glyph in the strip,
+                        // and distinct at 16px from the pie next to it
+                        // (audit LN-06).
+                        icon: const Icon(FluentIcons.stacked_line_chart,
+                            size: 16.0),
+                        onPressed: () {
+                          plausible.event(name: "wsl_resources");
+                          showVmResourcesDialog(
+                            widget.item,
+                            running:
+                                widget.running.contains(widget.item),
+                            context: resourcesContext,
+                          );
+                        },
+                      );
+                    }),
                   ),
                 ),
               ),

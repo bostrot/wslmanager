@@ -50,6 +50,7 @@
 - [x] Copie, renomeie, mova para outra unidade, faça backup e exclua instâncias
 - [x] Salve todas as instâncias em uma pasta — com uma lista do que há nela — e restaure-as em outro PC
 - [x] Compacte discos virtuais para recuperar o espaço que o WSL nunca devolve
+- [x] Veja o que uma instância está consumindo agora — processador, memória e swap, com um gráfico ao vivo
 - [x] Suporta Ubuntu, Debian, Alpine, Kali Linux, openSUSE, SLES e qualquer outra coisa que o WSL aceite
 
 **Colocar instâncias no ar mais rápido**
