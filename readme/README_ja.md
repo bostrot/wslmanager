@@ -139,12 +139,6 @@
 > 定期的な仕事」へと変えてくれます。一度買えばずっと使えて、次のリリースを直接
 > 支えることになります。
 
-> 🎁 **ローンチ特典 —— 先着 100 名は Pro が無料。** `START100` があらかじめ適用
-> された決済ページを開けば、次のページにライセンスキーが表示されます:
-> [**Windows**](https://buy.stripe.com/5kQeVd6ECgur3wJ2TO1Fe03?prefilled_promo_code=START100) ·
-> [**macOS**](https://buy.stripe.com/dRm00jbYWfqnaZb1PK1Fe02?prefilled_promo_code=START100)。
-> 1 人 1 ライセンス。100 名に達するとコードは使えなくなります。
-
 ## 🤖 AI アシスタントと MCP *(Pro)*
 
 このセクションの内容はすべて **Pro** のものです。無料版にはひとつも含まれません。

@@ -140,12 +140,6 @@
 > düzenli bir iş olarak yapılmasını sağlar. Bir kez alın, hep sizde kalsın — ve
 > doğrudan bir sonraki sürümü finanse edin.
 
-> 🎁 **Lansman kampanyası — ilk 100 kişi Pro'yu ücretsiz alıyor.** Ödeme sayfasını
-> `START100` kodu önceden uygulanmış olarak açın; lisans anahtarınız bir sonraki
-> sayfada olacak: [**Windows**](https://buy.stripe.com/5kQeVd6ECgur3wJ2TO1Fe03?prefilled_promo_code=START100) ·
-> [**macOS**](https://buy.stripe.com/dRm00jbYWfqnaZb1PK1Fe02?prefilled_promo_code=START100).
-> Kişi başına bir lisans; 100 hakkın tamamı bitince kod çalışmayı bırakır.
-
 ## 🤖 Yapay zekâ asistanı ve MCP *(Pro)*
 
 Bu bölümdeki her şey **Pro**'nun parçasıdır; ücretsiz uygulamada bunların hiçbiri yoktur.

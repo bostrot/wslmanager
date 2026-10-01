@@ -136,12 +136,6 @@
 > become planned, regular work instead of whatever time is left over. Buy it
 > once, keep it forever, and you are directly funding the next release.
 
-> 🎁 **Launch offer — the first 100 people get Pro for free.** Open the checkout
-> with the code `START100` already applied and your licence key is on the next
-> page: [**Windows**](https://buy.stripe.com/5kQeVd6ECgur3wJ2TO1Fe03?prefilled_promo_code=START100) ·
-> [**macOS**](https://buy.stripe.com/dRm00jbYWfqnaZb1PK1Fe02?prefilled_promo_code=START100).
-> One licence per person; once the 100 are gone the code stops working.
-
 ## 🤖 AI assistant & MCP *(Pro)*
 
 Everything in this section is part of **Pro**; the free app has none of it.

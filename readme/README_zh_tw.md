@@ -133,12 +133,6 @@
 > 是疊在上面的 AI 層，它帶來的收入讓維護與新功能成為有計畫的常態工作，而不是只能
 > 用剩下的時間去做。買一次，永遠擁有，你就是在直接資助下一個版本。
 
-> 🎁 **上線優惠 —— 前 100 位使用者免費取得 Pro。** 開啟已套用 `START100` 折扣碼的
-> 結帳頁面，下一頁就會顯示你的授權金鑰：
-> [**Windows**](https://buy.stripe.com/5kQeVd6ECgur3wJ2TO1Fe03?prefilled_promo_code=START100) ·
-> [**macOS**](https://buy.stripe.com/dRm00jbYWfqnaZb1PK1Fe02?prefilled_promo_code=START100)。
-> 每人限一份授權；100 份送完後折扣碼即失效。
-
 ## 🤖 AI 助理與 MCP *(Pro)*
 
 本節的所有內容都屬於 **Pro**；免費版並不包含其中任何一項。

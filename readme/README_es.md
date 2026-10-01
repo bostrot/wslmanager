@@ -140,12 +140,6 @@
 > vez, consérvalo para siempre, y estarás financiando directamente la próxima
 > versión.
 
-> 🎁 **Oferta de lanzamiento: las primeras 100 personas se llevan Pro gratis.**
-> Abre el pago con el código `START100` ya aplicado y tendrás tu clave de
-> licencia en la página siguiente: [**Windows**](https://buy.stripe.com/5kQeVd6ECgur3wJ2TO1Fe03?prefilled_promo_code=START100) ·
-> [**macOS**](https://buy.stripe.com/dRm00jbYWfqnaZb1PK1Fe02?prefilled_promo_code=START100).
-> Una licencia por persona; cuando se agoten las 100, el código dejará de funcionar.
-
 ## 🤖 Asistente de IA y MCP *(Pro)*
 
 Todo lo de esta sección forma parte de **Pro**; la app gratuita no incluye nada de esto.

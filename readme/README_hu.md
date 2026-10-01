@@ -139,12 +139,6 @@
 > hogy csak a maradék időből jutna rájuk. Vedd meg egyszer, tartsd meg örökre —
 > és közvetlenül a következő kiadást finanszírozod vele.
 
-> 🎁 **Indulási ajánlat — az első 100 embernek ingyen jár a Pro.** Nyisd meg a
-> fizetést az előre beírt `START100` kóddal, és a licenckulcsod a következő
-> oldalon lesz: [**Windows**](https://buy.stripe.com/5kQeVd6ECgur3wJ2TO1Fe03?prefilled_promo_code=START100) ·
-> [**macOS**](https://buy.stripe.com/dRm00jbYWfqnaZb1PK1Fe02?prefilled_promo_code=START100).
-> Személyenként egy licenc; ha elfogy a 100, a kód megszűnik működni.
-
 ## 🤖 MI-asszisztens és MCP *(Pro)*
 
 Minden, ami ebben a szakaszban szerepel, a **Pro** része; az ingyenes alkalmazásban egyik sincs benne.

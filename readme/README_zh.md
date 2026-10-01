@@ -133,12 +133,6 @@
 > 层，它带来的收入使维护和新功能成为有计划的常规工作，而不是只能用剩余时间去做。
 > 一次购买，永久拥有，你就是在直接资助下一个版本。
 
-> 🎁 **上线优惠 —— 前 100 位用户免费获得 Pro。** 打开已自动填入 `START100` 优惠码
-> 的结账页面，下一页就会显示你的许可证密钥：
-> [**Windows**](https://buy.stripe.com/5kQeVd6ECgur3wJ2TO1Fe03?prefilled_promo_code=START100) ·
-> [**macOS**](https://buy.stripe.com/dRm00jbYWfqnaZb1PK1Fe02?prefilled_promo_code=START100)。
-> 每人限一份许可证；100 份领完后优惠码即失效。
-
 ## 🤖 AI 助手与 MCP *(Pro)*
 
 本节的全部内容都属于 **Pro**；免费版不包含其中任何一项。

@@ -140,12 +140,6 @@
 > Arbeit statt dessen, was an Zeit übrig bleibt. Einmal kaufen, für immer
 > behalten — und Sie finanzieren direkt die nächste Version.
 
-> 🎁 **Zum Start — die ersten 100 Personen bekommen Pro kostenlos.** Öffnen Sie
-> die Kasse mit bereits eingetragenem Code `START100`, und Ihr Lizenzschlüssel
-> steht auf der nächsten Seite: [**Windows**](https://buy.stripe.com/5kQeVd6ECgur3wJ2TO1Fe03?prefilled_promo_code=START100) ·
-> [**macOS**](https://buy.stripe.com/dRm00jbYWfqnaZb1PK1Fe02?prefilled_promo_code=START100).
-> Eine Lizenz pro Person; sind die 100 vergeben, funktioniert der Code nicht mehr.
-
 ## 🤖 KI-Assistent & MCP *(Pro)*
 
 Alles in diesem Abschnitt gehört zu **Pro**; die kostenlose App hat davon nichts.
