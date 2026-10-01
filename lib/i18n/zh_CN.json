@@ -1035,6 +1035,7 @@
   "activate-network-text": "无法连接许可证服务。请检查网络连接后重试。",
   "plan-key-detail": "已使用 wslmanager.com 的许可证密钥激活。所有 Pro 功能均已解锁，包含更新。",
   "plan-commercial": "商业许可证",
+  "plan-team": "团队许可证",
   "mcp-server-feature": "面向 AI 代理的 MCP 服务器",
   "web-dashboard-settings-text": "网页仪表盘",
   "web-dashboard-info-text": "为本应用托管一个浏览器仪表盘，可从手机或同一网络中的任何其他设备打开：查看、启动、停止和管理实例，运行命令，打开终端，并使用应用提供的所有工具。还可以通过 Cloudflare 隧道发布到网络之外。",

@@ -1034,6 +1034,7 @@
   "activate-network-text": "Lisans hizmetine ulaşılamadı. Bağlantınızı kontrol edip tekrar deneyin.",
   "plan-key-detail": "wslmanager.com lisans anahtarıyla etkinleştirildi. Tüm Pro özellikleri açık, güncellemeler dahil.",
   "plan-commercial": "Ticari lisans",
+  "plan-team": "Takım lisansı",
   "mcp-server-feature": "Yapay zeka ajanları için MCP sunucusu",
   "web-dashboard-settings-text": "Web Panosu",
   "web-dashboard-info-text": "Bu uygulama için telefonunuzdan veya aynı ağdaki başka bir cihazdan açabileceğiniz bir tarayıcı panosu sunar: örnekleri görün, başlatın, durdurun ve yönetin, komut çalıştırın, terminal açın ve uygulamanın tüm araçlarını kullanın. İsteğe bağlı olarak bir Cloudflare tüneliyle ağınızın dışına da yayınlayın.",

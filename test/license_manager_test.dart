@@ -207,6 +207,37 @@ void main() {
       expect(LicenseManager().plan, LicensePlan.pro);
     });
 
+    test('a key answers to the plan the server named it', () async {
+      // Commercial and Team both come back from the server as a plan name
+      // the screen turns into a label; both unlock the same features.
+      LicenseManager.storeFreeFromOverride = past;
+      const plans = {
+        'commercial': LicensePlan.commercial,
+        'team': LicensePlan.team,
+        // An unknown name still came from a validated key: plain Pro.
+        'something-new': LicensePlan.pro,
+      };
+      const labels = {
+        'commercial': 'plan-commercial',
+        'team': 'plan-team',
+        'something-new': 'plan-pro',
+      };
+      for (final name in plans.keys) {
+        final plan = plans[name];
+        final label = labels[name];
+        prefs.setString('WebLicenseKey', 'AAAA-BBBB');
+        prefs.setBool('WebLicenseValid', true);
+        prefs.setString('WebLicensePlan', name);
+        prefs.setInt(
+            'WebLicenseCheckedAt', DateTime.now().millisecondsSinceEpoch);
+        await LicenseManager().init();
+
+        expect(LicenseManager().isPro, true, reason: name);
+        expect(LicenseManager().plan, plan, reason: name);
+        expect(LicenseManager().getPlanText(), label, reason: name);
+      }
+    });
+
     test('the Store is only advertised as selling Pro until the flip', () {
       LicenseManager.storeFreeFromOverride = future;
       expect(LicenseManager.storeSellsPro, true);

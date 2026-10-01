@@ -1034,6 +1034,7 @@
   "activate-network-text": "라이선스 서비스에 연결할 수 없습니다. 연결을 확인하고 다시 시도하세요.",
   "plan-key-detail": "wslmanager.com의 라이선스 키로 활성화되었습니다. 모든 Pro 기능이 열려 있으며 업데이트가 포함됩니다.",
   "plan-commercial": "상용 라이선스",
+  "plan-team": "팀 라이선스",
   "mcp-server-feature": "AI 에이전트용 MCP 서버",
   "web-dashboard-settings-text": "웹 대시보드",
   "web-dashboard-info-text": "휴대폰이나 같은 네트워크의 다른 기기에서 열 수 있는 이 앱의 브라우저 대시보드를 호스팅합니다. 인스턴스 보기, 시작, 중지, 관리, 명령 실행, 터미널 열기, 그리고 앱의 모든 도구를 사용할 수 있습니다. 원하면 Cloudflare 터널을 통해 네트워크 밖으로도 공개할 수 있습니다.",

@@ -1035,6 +1035,7 @@
   "activate-network-text": "Der Lizenzdienst ist nicht erreichbar. Prüfe deine Verbindung und versuche es erneut.",
   "plan-key-detail": "Mit einem Lizenzschlüssel von wslmanager.com aktiviert. Alle Pro-Funktionen sind freigeschaltet, Updates inklusive.",
   "plan-commercial": "Kommerzielle Lizenz",
+  "plan-team": "Team-Lizenz",
   "mcp-server-feature": "MCP-Server für KI-Agenten",
   "web-dashboard-settings-text": "Web-Dashboard",
   "web-dashboard-info-text": "Stellt ein Browser-Dashboard für diese App bereit, das du vom Handy oder jedem anderen Gerät im selben Netzwerk öffnen kannst: Instanzen ansehen, starten, stoppen und verwalten, Befehle ausführen, Terminals öffnen und jedes Werkzeug der App nutzen. Optional über einen Cloudflare-Tunnel auch außerhalb deines Netzwerks veröffentlichen.",

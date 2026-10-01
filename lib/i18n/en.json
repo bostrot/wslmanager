@@ -1034,6 +1034,7 @@
   "activate-network-text": "Could not reach the licence service. Check your connection and try again.",
   "plan-key-detail": "Activated with a licence key from wslmanager.com. All Pro features are unlocked, updates included.",
   "plan-commercial": "Commercial licence",
+  "plan-team": "Team licence",
   "mcp-server-feature": "MCP server for AI agents",
   "web-dashboard-settings-text": "Web Dashboard",
   "web-dashboard-info-text": "Host a browser dashboard for this app that you can open from your phone or any other device on the same network: see, start, stop and manage your instances, run commands, open terminals and use every tool the app offers. Optionally publish it beyond your network through a Cloudflare tunnel.",

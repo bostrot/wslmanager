@@ -1034,6 +1034,7 @@
   "activate-network-text": "ライセンスサービスに接続できませんでした。接続を確認して、もう一度お試しください。",
   "plan-key-detail": "wslmanager.com のライセンスキーで有効化されています。すべての Pro 機能が利用でき、アップデートも含まれます。",
   "plan-commercial": "商用ライセンス",
+  "plan-team": "チームライセンス",
   "mcp-server-feature": "AI エージェント向け MCP サーバー",
   "web-dashboard-settings-text": "Web ダッシュボード",
   "web-dashboard-info-text": "同じネットワーク上のスマートフォンやその他のデバイスから開けるブラウザー用ダッシュボードをホストします。インスタンスの確認・起動・停止・管理、コマンドの実行、ターミナルの起動、アプリのすべてのツールが使えます。必要に応じて Cloudflare トンネル経由でネットワーク外にも公開できます。",

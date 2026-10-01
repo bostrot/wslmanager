@@ -1035,6 +1035,7 @@
   "activate-network-text": "無法連線至授權服務。請檢查網路連線後再試一次。",
   "plan-key-detail": "已使用 wslmanager.com 的授權金鑰啟用。所有 Pro 功能均已解鎖，包含更新。",
   "plan-commercial": "商業授權",
+  "plan-team": "團隊授權",
   "mcp-server-feature": "供 AI 代理使用的 MCP 伺服器",
   "web-dashboard-settings-text": "網頁儀表板",
   "web-dashboard-info-text": "為本應用程式託管一個瀏覽器儀表板，可從手機或同一網路中的任何其他裝置開啟：檢視、啟動、停止與管理執行個體、執行命令、開啟終端機，並使用應用程式提供的所有工具。也可以透過 Cloudflare 通道發佈到網路之外。",

@@ -47,7 +47,7 @@ import 'package:wsl2distromanager/components/constants.dart';
 import 'package:wsl2distromanager/components/helpers.dart';
 import 'package:wsl2distromanager/components/logging.dart';
 
-enum LicensePlan { none, store, pro, commercial }
+enum LicensePlan { none, store, pro, commercial, team }
 
 /// Outcome of trying to turn a licence key into an entitlement.
 enum LicenseActivation {
@@ -421,6 +421,8 @@ class LicenseManager extends ChangeNotifier {
     switch (name) {
       case 'commercial':
         return LicensePlan.commercial;
+      case 'team':
+        return LicensePlan.team;
       case 'pro':
         return LicensePlan.pro;
       default:
@@ -585,6 +587,8 @@ class LicenseManager extends ChangeNotifier {
         return 'plan-store';
       case LicensePlan.commercial:
         return 'plan-commercial';
+      case LicensePlan.team:
+        return 'plan-team';
       case LicensePlan.pro:
         return 'plan-pro';
       case LicensePlan.none:

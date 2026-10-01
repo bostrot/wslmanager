@@ -1034,6 +1034,7 @@
   "activate-network-text": "A licencszolgáltatás nem érhető el. Ellenőrizd a kapcsolatot, és próbáld újra.",
   "plan-key-detail": "A wslmanager.com licenckulcsával aktiválva. Minden Pro funkció fel van oldva, a frissítésekkel együtt.",
   "plan-commercial": "Kereskedelmi licenc",
+  "plan-team": "Csapatlicenc",
   "mcp-server-feature": "MCP-kiszolgáló AI-ügynökökhöz",
   "web-dashboard-settings-text": "Webes irányítópult",
   "web-dashboard-info-text": "Böngészős irányítópultot szolgáltat az apphoz, amelyet telefonról vagy bármely más, azonos hálózaton lévő eszközről megnyithatsz: példányok megtekintése, indítása, leállítása és kezelése, parancsok futtatása, terminálok nyitása és az app minden eszközének használata. Igény szerint Cloudflare-alagúton keresztül a hálózatodon kívül is közzéteheted.",

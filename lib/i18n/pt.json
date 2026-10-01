@@ -1036,6 +1036,7 @@
   "activate-network-text": "Não foi possível contatar o serviço de licenças. Verifique sua conexão e tente novamente.",
   "plan-key-detail": "Ativado com uma chave de licença do wslmanager.com. Todos os recursos Pro estão desbloqueados, atualizações incluídas.",
   "plan-commercial": "Licença comercial",
+  "plan-team": "Licença de equipa",
   "mcp-server-feature": "Servidor MCP para agentes de IA",
   "web-dashboard-settings-text": "Painel web",
   "web-dashboard-info-text": "Hospeda um painel no navegador para este app que você pode abrir no celular ou em qualquer outro dispositivo da mesma rede: ver, iniciar, parar e gerenciar suas instâncias, executar comandos, abrir terminais e usar todas as ferramentas do app. Opcionalmente, publique-o fora da sua rede por um túnel Cloudflare.",
