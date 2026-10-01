@@ -5,6 +5,7 @@ import 'package:localization/localization.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:wsl2distromanager/api/deep_link.dart';
 import 'package:wsl2distromanager/api/license_manager.dart';
+import 'package:wsl2distromanager/api/pricing.dart';
 import 'package:wsl2distromanager/api/purchase_routes.dart';
 import 'package:wsl2distromanager/api/vm/vm_platform.dart';
 import 'package:wsl2distromanager/components/analytics.dart';
@@ -48,6 +49,12 @@ class _LicenseScreenState extends State<LicenseScreen> {
 
   bool _isLoading = false;
   bool _isActivating = false;
+
+  /// What the website cards quote. Starts on the compiled-in US dollar
+  /// amounts so the first frame has a price, and moves to the live prices
+  /// in this machine's currency once the catalogue and the OS region have
+  /// been read. A Store card never uses it: the Store page has its own.
+  PricingQuote _quote = PricingQuote.bundled();
   final TextEditingController _keyController = TextEditingController();
   final DeepLinkService _deepLinks = DeepLinkService();
 
@@ -132,15 +139,55 @@ class _LicenseScreenState extends State<LicenseScreen> {
     setState(() {
       _isLoading = false;
     });
+    // Only once the entitlement is known: a Pro user is shown no buy card,
+    // so there is no price to quote and nothing to fetch for them.
+    if (!LicenseManager().isPro) await _loadQuote();
+  }
+
+  /// Whether the quote has been asked for; once is enough per visit, and
+  /// "Check again" re-reads the entitlement without re-asking for prices.
+  bool _quoteRequested = false;
+
+  /// The live prices, in this machine's currency. Never throws and never
+  /// leaves the card empty: the service answers with the last document it
+  /// fetched, or the compiled-in dollars, when the website is unreachable.
+  Future<void> _loadQuote() async {
+    if (_quoteRequested) return;
+    _quoteRequested = true;
+    final quote = await PricingService().quote();
+    if (!mounted) return;
+    setState(() => _quote = quote);
+  }
+
+  /// What a website route is sold at right now: the live quote, or the
+  /// compiled-in dollars until one arrives. Null for the Store, whose own
+  /// page shows the price.
+  LocalizedPrice? _quotedPrice(PurchaseRoute route) {
+    final lookupKey = route.lookupKey;
+    if (lookupKey == null) return null;
+    return _quote[lookupKey] ?? PricingQuote.bundled()[lookupKey];
+  }
+
+  /// The price line for one card: the live quote for a website route, the
+  /// fixed copy for the Store.
+  String _priceLine(PurchaseRoute route) {
+    if (route.lookupKey == null) return route.priceKey.i18n();
+    return route.priceKey.i18n([_quotedPrice(route)?.text ?? '']);
   }
 
   Future<void> _openBuyPage(PurchaseRoute route) async {
     // Before the launch, not after: the Store and the website are counted
     // the same way whether or not the handover works, and a throw below
     // must not lose the click.
+    final price = _quotedPrice(route);
     plausible.event(name: 'license_buy_clicked', props: {
       'route': route.id.name,
       'host': _isApple ? 'macos' : 'windows',
+      // What the buyer was quoted, so a click can be set against the
+      // price and the currency it was made at — and a price change can be
+      // read off the clicks rather than guessed from the calendar.
+      if (price != null) 'currency': price.currency,
+      if (price != null) 'amount': '${price.amount}',
     });
 
     // No canLaunchUrl gate: on Windows it reports false for perfectly
@@ -430,10 +477,11 @@ class _LicenseScreenState extends State<LicenseScreen> {
           ),
           const SizedBox(height: 8),
           // The one question every buyer has first was the one thing the
-          // screen never answered (audit PS-02). The number is the US price;
-          // a Store page shows the buyer's own currency.
+          // screen never answered (audit PS-02). A website card quotes the
+          // live price in this machine's currency; a Store page shows the
+          // buyer's own currency itself.
           Text(
-            route.priceKey.i18n(),
+            _priceLine(route),
             key: ValueKey(
                 leading ? 'test-license-price' : 'test-license-web-price'),
             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),

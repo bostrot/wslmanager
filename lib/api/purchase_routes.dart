@@ -12,6 +12,7 @@
 // The copy lives here as i18n keys rather than strings so the screen stays a
 // plain renderer and the route set itself is testable without a UI.
 
+import 'package:wsl2distromanager/api/pricing.dart';
 import 'package:wsl2distromanager/components/constants.dart';
 
 /// How a route is identified in the UI — used for widget test keys and to
@@ -33,6 +34,7 @@ class PurchaseRoute {
     required this.detailKey,
     required this.priceKey,
     required this.buttonKey,
+    this.lookupKey,
   });
 
   final PurchaseRouteId id;
@@ -42,8 +44,17 @@ class PurchaseRoute {
 
   final String titleKey;
   final String detailKey;
+
+  /// The price line. With a [lookupKey] this is a format with one `%s`,
+  /// filled with the live price in the buyer's currency; without one it
+  /// is the whole line, for a route whose price the app does not know.
   final String priceKey;
   final String buttonKey;
+
+  /// The Stripe lookup key of the price this route sells at, for the
+  /// website routes: what `lib/api/pricing.dart` quotes. Null for the
+  /// Store, whose own page shows the price.
+  final String? lookupKey;
 }
 
 /// The routes offered on this host, in the order they should be shown.
@@ -66,8 +77,9 @@ List<PurchaseRoute> purchaseRoutesFor({
     // "Get Pro" heading there.
     titleKey: 'store-buy-title',
     detailKey: 'web-buy-detail-text',
-    priceKey: 'web-price-text',
+    priceKey: 'web-price-format',
     buttonKey: 'web-buy-btn',
+    lookupKey: proMacosLookupKey,
   );
 
   if (apple) return const [direct];
@@ -82,8 +94,9 @@ List<PurchaseRoute> purchaseRoutesFor({
         url: windowsBuyUrl,
         titleKey: 'store-buy-title',
         detailKey: 'web-buy-detail-text',
-        priceKey: 'win-web-price-text',
+        priceKey: 'web-price-format',
         buttonKey: 'web-buy-btn',
+        lookupKey: proWindowsLookupKey,
       ),
     ];
   }
@@ -104,8 +117,9 @@ List<PurchaseRoute> purchaseRoutesFor({
       url: windowsBuyUrl,
       titleKey: 'web-buy-title',
       detailKey: 'win-web-buy-detail-text',
-      priceKey: 'win-web-price-text',
+      priceKey: 'web-price-format',
       buttonKey: 'web-buy-btn',
+      lookupKey: proWindowsLookupKey,
     ),
   ];
 }

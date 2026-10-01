@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wsl2distromanager/api/pricing.dart';
 import 'package:wsl2distromanager/api/purchase_routes.dart';
 import 'package:wsl2distromanager/components/constants.dart';
 
@@ -35,12 +36,13 @@ void main() {
     });
 
     test('the Windows website route does not reuse the Mac price', () {
-      // The two are deliberately different amounts; sharing the key would
-      // quietly print the Mac price on the Windows card.
+      // The two are deliberately different amounts; sharing the lookup key
+      // would quietly print the Mac price on the Windows card.
       final mac = purchaseRoutesFor(apple: true).single;
       final windows = purchaseRoutesFor(apple: false).last;
 
-      expect(windows.priceKey, isNot(mac.priceKey));
+      expect(mac.lookupKey, proMacosLookupKey);
+      expect(windows.lookupKey, proWindowsLookupKey);
       expect(windows.detailKey, isNot(mac.detailKey));
     });
 
@@ -61,7 +63,19 @@ void main() {
       final en = englishStrings();
       final windows = purchaseRoutesFor(apple: false).last;
 
-      expect(en[windows.priceKey], contains('14.99'));
+      // The number itself comes from the pricing catalogue; the copy is a
+      // format the number is dropped into, so the line has somewhere to
+      // put it.
+      expect(en[windows.priceKey], contains('%s'));
+      expect(PricingQuote.bundled()[windows.lookupKey!]!.text, '\$29');
+    });
+
+    test('the Store card quotes no number: its own page shows the price', () {
+      final store = purchaseRoutesFor(apple: false).first;
+      final en = englishStrings();
+
+      expect(store.lookupKey, isNull);
+      expect(en[store.priceKey], isNot(contains('%s')));
     });
   });
 
@@ -88,12 +102,12 @@ void main() {
     });
 
     test('it still quotes the Windows price, not the Mac one', () {
-      final en = englishStrings();
       final only = purchaseRoutesFor(apple: false, storeSellsPro: false).single;
       final mac = purchaseRoutesFor(apple: true).single;
 
-      expect(only.priceKey, isNot(mac.priceKey));
-      expect(en[only.priceKey], contains('14.99'));
+      expect(only.lookupKey, proWindowsLookupKey);
+      expect(only.lookupKey, isNot(mac.lookupKey));
+      expect(PricingQuote.bundled()[only.lookupKey!]!.text, '\$29');
     });
 
     test('macOS is untouched — it never had a Store to lose', () {

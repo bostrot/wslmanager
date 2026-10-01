@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:plausible_analytics/plausible_analytics.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wsl2distromanager/api/license_manager.dart';
+import 'package:wsl2distromanager/api/pricing.dart';
 import 'package:wsl2distromanager/api/purchase_routes.dart';
 import 'package:wsl2distromanager/api/store_acquisition.dart';
 import 'package:wsl2distromanager/api/vm/vm_platform.dart';
@@ -61,6 +62,7 @@ Widget _page({bool? appleHost, bool? storeSellsPro = true}) => FluentApp(
 void main() {
   late _RecordingPlausible analytics;
   late Plausible realPlausible;
+  late int quotesRequested;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -71,9 +73,18 @@ void main() {
     realPlausible = plausible;
     analytics = _RecordingPlausible();
     plausible = analytics;
+    // The quote is what the pricing service would answer with no network
+    // and no OS to ask: the compiled-in dollars. Counted, so the screen can
+    // be held to asking only when it has a price to show.
+    quotesRequested = 0;
+    PricingService.quoteOverride = () async {
+      quotesRequested++;
+      return PricingQuote.bundled();
+    };
   });
 
   tearDown(() async {
+    PricingService.quoteOverride = null;
     plausible = realPlausible;
     LicenseManager.storeInstallCheckOverride = null;
     LicenseManager.storeFreeFromOverride = null;
@@ -210,6 +221,12 @@ void main() {
     for (final click in clicks) {
       expect(click.props['host'], 'windows');
     }
+    // The website route is quoted on the card, so its click carries what
+    // the buyer saw; the Store shows its own price and sends none.
+    expect(clicks[0].props.containsKey('amount'), isFalse);
+    expect(clicks[0].props.containsKey('currency'), isFalse);
+    expect(clicks[1].props['currency'], 'USD');
+    expect(double.parse(clicks[1].props['amount']!), 29);
   });
 
   testWidgets('left undecided, the screen follows the shipped flip instant',
@@ -348,5 +365,22 @@ void main() {
     expect(find.byKey(const ValueKey('test-license-key-field')), findsNothing);
     // The feature list stays, so a paying user can still see what they have.
     expect(find.text('compare-plans-text'), findsOneWidget);
+    // And nothing was fetched: there is no price on this screen to quote.
+    expect(quotesRequested, 0);
+  });
+
+  testWidgets('a free install asks for the prices exactly once',
+      (tester) async {
+    await tester.binding.setSurfaceSize(_kSurface);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(_page());
+    await tester.pumpAndSettle();
+    expect(quotesRequested, 1);
+
+    // "Check again" re-reads the entitlement, not the prices.
+    await tester.tap(find.byKey(const ValueKey('test-license-recheck')));
+    await tester.pumpAndSettle();
+    expect(quotesRequested, 1);
   });
 }

@@ -20,6 +20,10 @@ const String macBuyUrl =
 const String windowsBuyUrl =
     "https://wslmanager.com/buy/?platform=windows&utm_source=app&utm_medium=windows";
 
+/// The prices, in every currency they are offered in, as wslmanager.com
+/// publishes them from Stripe once a day. See lib/api/pricing.dart.
+const String pricingUrl = 'https://wslmanager.com/pricing.json';
+
 /// Turns a licence key into an entitlement. Answers
 /// `{"valid": true, "plan": "pro", ...}` or `{"valid": false, ...}`.
 const String licenseValidateUrl =
