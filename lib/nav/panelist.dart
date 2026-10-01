@@ -1,6 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart' hide Page;
 import 'package:wsl2distromanager/api/experimental_features.dart';
 import 'package:wsl2distromanager/api/license_manager.dart';
+import 'package:wsl2distromanager/components/analytics.dart';
 import 'package:localization/localization.dart';
 import 'package:wsl2distromanager/components/badge_pill.dart';
 import 'package:wsl2distromanager/components/beta_badge.dart';
@@ -225,6 +226,13 @@ List<NavigationPaneItem> get footerItems => [
               }),
         body: const SizedBox.shrink(),
         onTap: () {
+          // Pro users open their licence; everyone else is being upsold —
+          // unless they are already looking at it, which navigateGuarded
+          // ignores and so should the count.
+          if (!LicenseManager().isPro &&
+              router.state.uri.toString() != '/license') {
+            trackUpgradeClick('pane');
+          }
           navigateGuarded('license', path: '/license');
         },
       ),

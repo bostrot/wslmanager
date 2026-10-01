@@ -1191,7 +1191,10 @@ class SettingsPageState extends State<SettingsPage> {
               severity: InfoBarSeverity.info,
               action: Button(
                 key: const ValueKey('test-byok-upgrade'),
-                onPressed: () => navigateGuarded('license'),
+                onPressed: () {
+                  trackUpgradeClick('settings_byok');
+                  navigateGuarded('license');
+                },
                 child: Text('upgrade-text'.i18n()),
               ),
             ),
@@ -1416,7 +1419,10 @@ class SettingsPageState extends State<SettingsPage> {
               severity: InfoBarSeverity.info,
               action: Button(
                 key: const ValueKey('test-mcp-upgrade'),
-                onPressed: () => navigateGuarded('license'),
+                onPressed: () {
+                  trackUpgradeClick('settings_mcp');
+                  navigateGuarded('license');
+                },
                 child: Text('upgrade-text'.i18n()),
               ),
             ),
@@ -1811,7 +1817,10 @@ class SettingsPageState extends State<SettingsPage> {
               severity: InfoBarSeverity.info,
               action: Button(
                 key: const ValueKey('test-web-upgrade'),
-                onPressed: () => navigateGuarded('license'),
+                onPressed: () {
+                  trackUpgradeClick('settings_web_dashboard');
+                  navigateGuarded('license');
+                },
                 child: Text('upgrade-text'.i18n()),
               ),
             ),

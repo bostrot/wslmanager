@@ -12,6 +12,7 @@ import 'package:wsl2distromanager/api/ai_workspace/config_service.dart';
 import 'package:wsl2distromanager/api/ai_workspace/service.dart';
 import 'package:wsl2distromanager/api/ai_workspace/shared_settings.dart';
 import 'package:wsl2distromanager/api/license_manager.dart';
+import 'package:wsl2distromanager/components/analytics.dart';
 import 'package:wsl2distromanager/api/sandbox_service.dart';
 import 'package:wsl2distromanager/api/vm/vm_platform.dart';
 import 'package:wsl2distromanager/api/volume_mounts.dart';
@@ -589,7 +590,10 @@ class _AiWorkspacePageState extends State<AiWorkspacePage> {
             const SizedBox(height: 24),
             FilledButton(
               key: const ValueKey('test-ai-workspace-upgrade'),
-              onPressed: () => router.pushNamed('license'),
+              onPressed: () {
+                trackUpgradeClick('ai_workspace');
+                router.pushNamed('license');
+              },
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

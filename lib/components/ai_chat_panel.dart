@@ -24,6 +24,7 @@ import 'package:wsl2distromanager/api/ai_chat_sessions.dart';
 import 'package:wsl2distromanager/api/ai_service.dart';
 import 'package:wsl2distromanager/api/cancellation.dart';
 import 'package:wsl2distromanager/api/license_manager.dart';
+import 'package:wsl2distromanager/components/analytics.dart';
 import 'package:wsl2distromanager/api/quick_actions.dart';
 import 'package:wsl2distromanager/api/sandbox_service.dart';
 import 'package:wsl2distromanager/api/todo_store.dart';
@@ -648,7 +649,12 @@ class _AiChatPanelState extends State<AiChatPanel> {
               onClose: _unblock,
               action: Button(
                 key: const ValueKey('test-aichat-blocked-action'),
-                onPressed: () => navigateGuarded(_blockedRouteName!),
+                onPressed: () {
+                  if (_blockedRouteName == 'license') {
+                    trackUpgradeClick('ai_chat');
+                  }
+                  navigateGuarded(_blockedRouteName!);
+                },
                 child: Text(_blockedActionKey!.i18n()),
               ),
             ),
