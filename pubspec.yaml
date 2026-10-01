@@ -2,7 +2,7 @@ name: wsl2distromanager
 description: A GUI to quickly manage your WSL instances.
 
 publish_to: "none"
-version: 2.4.1 # Current version
+version: 2.5.0 # Current version
 
 environment:
   sdk: ">=2.17.0 <4.0.0"
