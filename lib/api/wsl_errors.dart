@@ -19,6 +19,8 @@
 
 import 'package:localization/localization.dart';
 
+import 'process_output.dart';
+
 /// The `Wsl/…` code WSL stamps on its own failures.
 ///
 /// Matched anywhere in the text because the surrounding label ("Error code:",
@@ -183,10 +185,8 @@ String friendlyErrorReason(Object? error) =>
 String _asText(dynamic stream) {
   if (stream == null) return '';
   if (stream is List<int>) {
-    // Bytes only reach here from a caller that did not decode; the UTF-16LE
-    // decode lives in ExecutionBroker, so fall back to a lossy-but-readable
-    // rendering rather than printing the byte list.
-    return String.fromCharCodes(stream.where((b) => b != 0)).trim();
+    // Bytes only reach here from a caller that did not decode.
+    return decodeProcessOutput(stream).replaceAll('\u0000', '').trim();
   }
   return stream.toString().trim();
 }

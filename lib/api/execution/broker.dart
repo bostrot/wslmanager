@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:convert' show Utf8Decoder;
 import 'dart:io' show Process, ProcessSignal, systemEncoding;
 
+import '../process_output.dart';
 import '../shell.dart';
 import 'models.dart';
 
@@ -44,18 +45,18 @@ class ExecutionBroker {
   // Output decoding
   // -----------------------------------------------------------------------
 
-  /// Decode WSL process output (UTF-16LE with null-byte separators) to text.
+  /// Decode WSL process output to text.
   ///
-  /// WSL on Windows outputs UTF-16LE, so every ASCII char is followed by a
-  /// null byte. This decoder strips the null bytes and decodes as UTF-8,
-  /// matching [WSLApi.utf8Convert].
+  /// wsl.exe reports in UTF-16LE itself and passes a distro command's UTF-8
+  /// through untouched; [decodeProcessOutput] tells the two apart, matching
+  /// [WSLApi.utf8Convert]. Decoding the UTF-16 as UTF-8 and dropping the null
+  /// bytes, which this used to do, only survives ASCII — a localized Windows
+  /// got `ck(W` for `正在` (bostrot/wslmanager#322).
   static String decodeWslOutput(dynamic data) {
     if (data == null || (data is List && data.isEmpty)) return '';
     if (data is String) return _stripControlChars(data);
     // Raw bytes from ProcessResult with stdoutEncoding: null.
-    final bytes = data as List<int>;
-    final decoded = const Utf8Decoder(allowMalformed: true).convert(bytes);
-    return _stripControlChars(decoded);
+    return _stripControlChars(decodeProcessOutput(data as List<int>));
   }
 
   /// Strip ANSI escape sequences and control characters (including the null
@@ -87,6 +88,9 @@ class ExecutionBroker {
   /// lenient UTF-8 decode so one bad byte cannot fail the whole call.
   static String _decodeSystem(List<int> bytes) {
     if (bytes.isEmpty) return '';
+    // `ssh host wsl ...` hands wsl.exe's UTF-16LE straight through, and no
+    // system code page decodes that.
+    if (looksLikeUtf16Le(bytes)) return decodeProcessOutput(bytes);
     try {
       return systemEncoding.decode(bytes);
     } on FormatException {

@@ -1,5 +1,6 @@
-import 'dart:convert' show Utf8Decoder;
 import 'dart:io';
+
+import '../process_output.dart';
 
 /// Used to store the instances of a backend in a list.
 class Instances {
@@ -282,13 +283,16 @@ abstract class VmBackend {
   String instanceMetaLabel(String distribution) =>
       instanceSizeLabel(distribution);
 
-  /// Convert process bytes to readable text while preserving valid UTF-8.
+  /// Convert process bytes to readable text.
+  ///
+  /// Despite the name this is not UTF-8 only: wsl.exe's own messages are
+  /// UTF-16LE and are decoded as such, see [decodeProcessOutput].
   String utf8Convert(List<int> bytes) {
     if (bytes.isEmpty) {
       return '';
     }
 
-    final decoded = const Utf8Decoder(allowMalformed: true).convert(bytes);
+    final decoded = decodeProcessOutput(bytes);
     // Keep common whitespace while stripping other control characters.
     return decoded.replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F]'), '');
   }
