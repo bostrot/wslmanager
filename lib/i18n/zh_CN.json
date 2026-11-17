@@ -1387,6 +1387,9 @@
   "vmresizeguestmanual-text": "磁盘变大后，客户机会看到一个更大的块设备，但文件系统保持原样。请在客户机内部扩展——macOS 用磁盘工具，Linux 用 growpart 和 resize2fs。",
   "vmresizing-text": "正在调整 %s 的规格…",
   "vmresized-text": "%s0 现在有 %s1 个核心、%s2 GB 内存和 %s3 GB 磁盘，下次启动时生效。",
+  "sale-banner-text": "%s0：WSL Manager Pro 限时立减 %s1。",
+  "sale-banner-button": "查看优惠",
+  "sale-applied-text": "%s0：立减 %s1，结账时自动应用。",
   "vmconsolelogtooltip-text": "查看控制台日志",
   "vmnoconsolelog-text": "此虚拟机尚未向控制台输出任何内容。"
 }

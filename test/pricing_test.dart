@@ -161,6 +161,95 @@ void main() {
     });
   });
 
+  group('PricingSale', () {
+    Map<String, dynamic> sale({Object? percentOff = 50}) => {
+          'id': 'black-friday-2026',
+          'name': 'Black Friday',
+          'code': 'BLACKFRIDAY',
+          'percentOff': percentOff,
+          'startsAt': '2026-11-23T00:00:00Z',
+          'endsAt': '2026-12-01T08:00:00Z',
+          'lastDay': '2026-11-30',
+          'lookupKeys': ['pro_windows', 'pro_macos'],
+        };
+
+    test('a document without a sale has none', () {
+      expect(PricingCatalog.fromJson(document()).sale, isNull);
+    });
+
+    test('a sale the app cannot read costs it the sale, not the prices', () {
+      for (final broken in [
+        'soon',
+        {'id': 'x'},
+        sale(percentOff: 100),
+        sale(percentOff: 'half'),
+        {...sale(), 'endsAt': '2026-11-01T00:00:00Z'},
+        {...sale(), 'lookupKeys': 'pro_windows'},
+      ]) {
+        final catalog = PricingCatalog.fromJson({...document(), 'sale': broken});
+        expect(catalog.sale, isNull, reason: '$broken');
+        expect(catalog.priceOf('pro_windows', 'USD')!.text, '\$14.99');
+      }
+    });
+
+    test('runs from its first instant up to, not including, its last', () {
+      final parsed =
+          PricingCatalog.fromJson({...document(), 'sale': sale()}).sale!;
+      expect(parsed.isActive(DateTime.utc(2026, 11, 22, 23, 59, 59)), isFalse);
+      expect(parsed.isActive(DateTime.utc(2026, 11, 23)), isTrue);
+      expect(parsed.isActive(DateTime.utc(2026, 12, 1, 7, 59, 59)), isTrue);
+      expect(parsed.isActive(DateTime.utc(2026, 12, 1, 8)), isFalse);
+      expect(parsed.percentText, '50%');
+      expect(parsed.name, 'Black Friday');
+    });
+
+    test('reduces a price the way Stripe does: round the discount, take it off',
+        () {
+      final parsed = PricingSale.tryParse(sale())!;
+      expect(parsed.reduce(29, 'USD'), 14.5);
+      expect(parsed.reduce(28.99, 'EUR'), 14.49);
+      expect(parsed.reduce(24.99, 'gbp'), 12.49);
+      expect(parsed.reduce(4300, 'JPY'), 2150);
+      expect(parsed.reduce(4301, 'JPY'), 2150);
+    });
+
+    test('a quote carries the sale only while it runs, and only for its plans',
+        () {
+      final catalog = PricingCatalog.fromJson({...document(), 'sale': sale()});
+      const germany = SystemLocation(region: 'DE');
+
+      final before = PricingQuote.quoteFrom(catalog, germany,
+          now: DateTime.utc(2026, 11, 15));
+      expect(before.sale, isNull);
+      expect(before.salePriceOf('pro_windows'), isNull);
+
+      final during = PricingQuote.quoteFrom(catalog, germany,
+          now: DateTime.utc(2026, 11, 27));
+      expect(during.sale!.id, 'black-friday-2026');
+      expect(during['pro_windows']!.text, '€14.99');
+      expect(during.salePriceOf('pro_windows')!.text, '€7.49');
+      expect(during.salePriceOf('commercial_seat'), isNull);
+    });
+
+    test('survives the cache, so an app offline on the day still shows it', () {
+      final catalog = PricingCatalog.fromJson({...document(), 'sale': sale()});
+      final again = PricingCatalog.fromJson(
+          jsonDecode(jsonEncode(catalog.toJson())) as Map<String, dynamic>);
+      expect(again.sale!.id, 'black-friday-2026');
+      expect(again.sale!.endsAt, DateTime.utc(2026, 12, 1, 8));
+      expect(again.sale!.lookupKeys, ['pro_windows', 'pro_macos']);
+    });
+
+    test('the service reports a sale only while it is running', () async {
+      PricingService.httpOverride = Dio()
+        ..httpClientAdapter = _Adapter(body: {...document(), 'sale': sale()});
+      PricingService.now = () => DateTime.utc(2026, 11, 15);
+      expect(await PricingService().runningSale(), isNull);
+      PricingService.now = () => DateTime.utc(2026, 11, 27);
+      expect((await PricingService().runningSale())!.id, 'black-friday-2026');
+    });
+  });
+
   group('SystemLocation', () {
     test('reads the region out of reg query', () {
       expect(

@@ -1386,6 +1386,9 @@
   "vmresizeguestmanual-text": "A nagyobb lemez nagyobb blokkeszközként jelenik meg a vendégben, de a vendég megtartja a meglévő fájlrendszerét. Növeld meg a vendégen belül — macOS alatt a Lemezkezelővel, Linuxon growpart és resize2fs paranccsal.",
   "vmresizing-text": "%s átméretezése…",
   "vmresized-text": "%s0 mostantól %s1 magot, %s2 GB memóriát és %s3 GB lemezt kap. A következő indításkor lép életbe.",
+  "sale-banner-text": "%s0: %s1 kedvezmény a WSL Manager Pro árából, korlátozott ideig.",
+  "sale-banner-button": "Az ajánlat megtekintése",
+  "sale-applied-text": "%s0: %s1 kedvezmény, a fizetésnél már levonva.",
   "vmconsolelogtooltip-text": "Konzolnapló megtekintése",
   "vmnoconsolelog-text": "Ez a VM még semmit nem írt a konzoljára."
 }

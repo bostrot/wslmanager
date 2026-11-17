@@ -100,6 +100,101 @@ String formatPrice(num amount, String currency) {
   return '$symbol$number';
 }
 
+// Currencies written without a fraction, where Stripe's smallest unit is
+// the whole amount.
+const Set<String> _zeroDecimal = {
+  'BIF', 'CLP', 'DJF', 'GNF', 'JPY', 'KMF', 'KRW', 'MGA', 'PYG', 'RWF',
+  'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF',
+};
+
+/// A time-limited discount the website is running on some plans. The
+/// discount itself is a Stripe promotion code the website's buy page puts
+/// into the checkout; the app only announces it and quotes what it comes
+/// to. The document carries the sale before it starts, because a fetched
+/// document is kept for a day, and the app decides from its own clock
+/// whether it is on.
+@immutable
+class PricingSale {
+  const PricingSale({
+    required this.id,
+    required this.name,
+    required this.percentOff,
+    required this.startsAt,
+    required this.endsAt,
+    required this.lookupKeys,
+  });
+
+  /// Stable per sale ("black-friday-2026"): what a dismissed banner is
+  /// remembered by, and what analytics reports.
+  final String id;
+
+  /// What the sale is called, as the website wrote it: "Black Friday".
+  final String name;
+
+  final num percentOff;
+  final DateTime startsAt;
+  final DateTime endsAt;
+
+  /// The plans it covers.
+  final List<String> lookupKeys;
+
+  /// The sale in a published document, or null when there is none or it is
+  /// not one this build can show. Never throws: a sale the app cannot read
+  /// must not cost it the prices that came with it.
+  static PricingSale? tryParse(Object? raw) {
+    if (raw is! Map) return null;
+    final id = raw['id'];
+    final percentOff = raw['percentOff'];
+    final startsAt = DateTime.tryParse('${raw['startsAt']}');
+    final endsAt = DateTime.tryParse('${raw['endsAt']}');
+    final keys = raw['lookupKeys'];
+    if (id is! String || id.isEmpty) return null;
+    if (percentOff is! num || percentOff <= 0 || percentOff >= 100) return null;
+    if (startsAt == null || endsAt == null || !startsAt.isBefore(endsAt)) {
+      return null;
+    }
+    if (keys is! List) return null;
+    final name = raw['name'];
+    return PricingSale(
+      id: id,
+      name: name is String && name.isNotEmpty ? name : 'Sale',
+      percentOff: percentOff,
+      startsAt: startsAt,
+      endsAt: endsAt,
+      lookupKeys: keys.whereType<String>().toList(growable: false),
+    );
+  }
+
+  bool isActive(DateTime now) => !now.isBefore(startsAt) && now.isBefore(endsAt);
+
+  bool appliesTo(String lookupKey) => lookupKeys.contains(lookupKey);
+
+  /// "50%", the way it is written next to a price.
+  String get percentText {
+    final whole = percentOff == percentOff.roundToDouble();
+    return '${whole ? percentOff.round() : percentOff}%';
+  }
+
+  /// What Stripe charges for [amount] with the discount: it rounds the
+  /// discount in the currency's smallest unit and takes that off, so half
+  /// off €28.99 is €14.49 and not €14.50.
+  num reduce(num amount, String currency) {
+    final unit = _zeroDecimal.contains(currency.toUpperCase()) ? 1 : 100;
+    final minor = (amount * unit).round();
+    final reduced = minor - (minor * percentOff / 100).round();
+    return unit == 1 ? reduced : reduced / unit;
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'percentOff': percentOff,
+        'startsAt': startsAt.toUtc().toIso8601String(),
+        'endsAt': endsAt.toUtc().toIso8601String(),
+        'lookupKeys': lookupKeys,
+      };
+}
+
 /// The document wslmanager.com publishes: the prices and the two maps.
 @immutable
 class PricingCatalog {
@@ -109,7 +204,11 @@ class PricingCatalog {
     this.regions = const {},
     this.timeZones = const {},
     this.timeZonePrefixes = const {},
+    this.sale,
   });
+
+  /// The sale the website announces, running or not; see [PricingSale].
+  final PricingSale? sale;
 
   /// When the website last read the prices out of Stripe; null for the
   /// amounts compiled into the app.
@@ -183,6 +282,7 @@ class PricingCatalog {
       regions: strings(json['regions']),
       timeZones: strings(json['timeZones']),
       timeZonePrefixes: strings(json['timeZonePrefixes']),
+      sale: PricingSale.tryParse(json['sale']),
     );
   }
 
@@ -226,6 +326,7 @@ class PricingCatalog {
         'regions': regions,
         'timeZones': timeZones,
         'timeZonePrefixes': timeZonePrefixes,
+        if (sale != null) 'sale': sale!.toJson(),
       };
 }
 
@@ -311,28 +412,50 @@ class SystemLocation {
 /// The prices to show right now: one per plan, all in one currency.
 @immutable
 class PricingQuote {
-  const PricingQuote({required this.currency, required this.prices});
+  const PricingQuote({required this.currency, required this.prices, this.sale});
 
   final String currency;
 
-  /// Lookup key → price. Every plan in the catalogue is here.
+  /// Lookup key → the regular price. Every plan in the catalogue is here.
   final Map<String, LocalizedPrice> prices;
 
+  /// The sale running at the moment of the quote, or null.
+  final PricingSale? sale;
+
   LocalizedPrice? operator [](String lookupKey) => prices[lookupKey];
+
+  /// What [lookupKey] costs while the sale runs, or null when there is no
+  /// sale or it does not cover that plan.
+  LocalizedPrice? salePriceOf(String lookupKey) {
+    final regular = prices[lookupKey];
+    final running = sale;
+    if (regular == null || running == null) return null;
+    if (!running.appliesTo(lookupKey)) return null;
+    return LocalizedPrice(
+        amount: running.reduce(regular.amount, regular.currency),
+        currency: regular.currency);
+  }
 
   /// The compiled-in US dollar prices, for before anything has been read.
   static PricingQuote bundled() => quoteFrom(PricingCatalog.bundled,
       const SystemLocation(region: 'US', timeZone: null));
 
-  static PricingQuote quoteFrom(
-      PricingCatalog catalog, SystemLocation location) {
+  static PricingQuote quoteFrom(PricingCatalog catalog, SystemLocation location,
+      {DateTime? now}) {
     final currency = catalog.currencyFor(
         region: location.region, timeZone: location.timeZone);
-    return PricingQuote(currency: currency, prices: {
-      for (final key in catalog.prices.keys)
-        if (catalog.priceOf(key, currency) != null)
-          key: catalog.priceOf(key, currency)!,
-    });
+    final sale = catalog.sale;
+    return PricingQuote(
+      currency: currency,
+      prices: {
+        for (final key in catalog.prices.keys)
+          if (catalog.priceOf(key, currency) != null)
+            key: catalog.priceOf(key, currency)!,
+      },
+      sale: sale != null && sale.isActive(now ?? PricingService.now())
+          ? sale
+          : null,
+    );
   }
 }
 
@@ -411,6 +534,20 @@ class PricingService {
       logInfo('pricing: could not fetch $pricingUrl: $e');
       return cached();
     }
+  }
+
+  /// Test seam for the banner, like [quoteOverride] for the screen.
+  @visibleForTesting
+  static Future<PricingSale?> Function()? saleOverride;
+
+  /// The sale running right now, or null. Costs at most the daily fetch
+  /// and asks the OS nothing, so the home page can afford it. Like every
+  /// price, only to be asked for an install that is not Pro.
+  Future<PricingSale?> runningSale() async {
+    final override = saleOverride;
+    if (override != null) return override();
+    final sale = (await load()).sale;
+    return sale != null && sale.isActive(now()) ? sale : null;
   }
 
   /// The prices to show this machine, in its currency.

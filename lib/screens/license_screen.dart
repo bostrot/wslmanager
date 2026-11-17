@@ -175,11 +175,19 @@ class _LicenseScreenState extends State<LicenseScreen> {
     return route.priceKey.i18n([_quotedPrice(route)?.text ?? '']);
   }
 
+  /// What a website route costs while a sale covers it, or null. The
+  /// website's buy page applies the discount at checkout on its own.
+  LocalizedPrice? _salePrice(PurchaseRoute route) {
+    final lookupKey = route.lookupKey;
+    if (lookupKey == null) return null;
+    return _quote.salePriceOf(lookupKey);
+  }
+
   Future<void> _openBuyPage(PurchaseRoute route) async {
     // Before the launch, not after: the Store and the website are counted
     // the same way whether or not the handover works, and a throw below
     // must not lose the click.
-    final price = _quotedPrice(route);
+    final price = _salePrice(route) ?? _quotedPrice(route);
     plausible.event(name: 'license_buy_clicked', props: {
       'route': route.id.name,
       'host': _isApple ? 'macos' : 'windows',
@@ -188,6 +196,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
       // read off the clicks rather than guessed from the calendar.
       if (price != null) 'currency': price.currency,
       if (price != null) 'amount': '${price.amount}',
+      if (_salePrice(route) != null) 'sale': _quote.sale!.id,
     });
 
     // No canLaunchUrl gate: on Windows it reports false for perfectly
@@ -460,6 +469,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
   /// with.
   Widget _buildBuySection(PurchaseRoute route, {required bool leading}) {
     final isStore = route.id == PurchaseRouteId.store;
+    final salePrice = _salePrice(route);
     return Card(
       padding: const EdgeInsets.all(20),
       borderRadius: BorderRadius.circular(10),
@@ -480,12 +490,42 @@ class _LicenseScreenState extends State<LicenseScreen> {
           // screen never answered (audit PS-02). A website card quotes the
           // live price in this machine's currency; a Store page shows the
           // buyer's own currency itself.
-          Text(
-            _priceLine(route),
-            key: ValueKey(
-                leading ? 'test-license-price' : 'test-license-web-price'),
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-          ),
+          if (salePrice != null) ...[
+            Text(
+              'sale-applied-text'
+                  .i18n([_quote.sale!.name, _quote.sale!.percentText]),
+              key: const ValueKey('test-license-sale'),
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: FluentTheme.of(context).accentColor),
+            ),
+            const SizedBox(height: 4),
+            Text.rich(
+              TextSpan(children: [
+                TextSpan(
+                  text: _quotedPrice(route)?.text ?? '',
+                  style: TextStyle(
+                      fontWeight: FontWeight.normal,
+                      color: secondaryTextColor(context),
+                      decoration: TextDecoration.lineThrough),
+                ),
+                const TextSpan(text: '  '),
+                TextSpan(text: route.priceKey.i18n([salePrice.text])),
+              ]),
+              key: ValueKey(
+                  leading ? 'test-license-price' : 'test-license-web-price'),
+              style:
+                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            ),
+          ] else
+            Text(
+              _priceLine(route),
+              key: ValueKey(
+                  leading ? 'test-license-price' : 'test-license-web-price'),
+              style:
+                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            ),
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,

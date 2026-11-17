@@ -1386,6 +1386,9 @@
   "vmresizeguestmanual-text": "ディスクを広げるとゲストからはより大きなブロックデバイスとして見えますが、ファイルシステムはそのままです。ゲストの中で拡張してください — macOS ならディスクユーティリティ、Linux なら growpart と resize2fs です。",
   "vmresizing-text": "%s のサイズを変更しています…",
   "vmresized-text": "%s0 は %s1 コア、メモリ %s2 GB、ディスク %s3 GB になりました。次回の起動時から有効になります。",
+  "sale-banner-text": "%s0: WSL Manager Pro が期間限定で %s1 オフ。",
+  "sale-banner-button": "セールを見る",
+  "sale-applied-text": "%s0: %s1 オフ。決済画面で適用されます。",
   "vmconsolelogtooltip-text": "コンソールログを表示",
   "vmnoconsolelog-text": "このVMはまだコンソールに何も出力していません。"
 }

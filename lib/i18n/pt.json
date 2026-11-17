@@ -1388,6 +1388,9 @@
   "vmresizeguestmanual-text": "Um disco maior chega ao convidado como um dispositivo de bloco maior, mas o convidado mantém o sistema de arquivos que tem. Amplie-o de dentro do convidado — Utilitário de Disco no macOS, growpart e resize2fs no Linux.",
   "vmresizing-text": "Redimensionando %s…",
   "vmresized-text": "%s0 agora tem %s1 núcleos, %s2 GB de memória e um disco de %s3 GB. Vale a partir da próxima inicialização.",
+  "sale-banner-text": "%s0: %s1 de desconto no WSL Manager Pro por tempo limitado.",
+  "sale-banner-button": "Ver a oferta",
+  "sale-applied-text": "%s0: %s1 de desconto, aplicado no checkout.",
   "vmconsolelogtooltip-text": "Ver registo da consola",
   "vmnoconsolelog-text": "Esta VM ainda não escreveu nada na sua consola."
 }

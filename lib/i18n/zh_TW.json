@@ -1387,6 +1387,9 @@
   "vmresizeguestmanual-text": "磁碟變大後，客體會看到更大的區塊裝置，但檔案系統維持原樣。請在客體內部擴充——macOS 使用磁碟工具程式，Linux 使用 growpart 與 resize2fs。",
   "vmresizing-text": "正在調整 %s 的規格…",
   "vmresized-text": "%s0 現在有 %s1 個核心、%s2 GB 記憶體與 %s3 GB 磁碟，下次啟動時生效。",
+  "sale-banner-text": "%s0：WSL Manager Pro 限時折抵 %s1。",
+  "sale-banner-button": "查看優惠",
+  "sale-applied-text": "%s0：折抵 %s1，結帳時自動套用。",
   "vmconsolelogtooltip-text": "檢視主控台記錄",
   "vmnoconsolelog-text": "此虛擬機器尚未向主控台輸出任何內容。"
 }

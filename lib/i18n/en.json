@@ -1386,6 +1386,9 @@
   "vmresizeguestmanual-text": "A bigger disk reaches the guest as a bigger block device, but the guest keeps the filesystem it has. Grow it from inside the guest — Disk Utility on macOS, growpart and resize2fs on Linux.",
   "vmresizing-text": "Resizing %s…",
   "vmresized-text": "%s0 now has %s1 cores, %s2 GB memory and a %s3 GB disk. It takes effect on the next start.",
+  "sale-banner-text": "%s0: %s1 off WSL Manager Pro for a limited time.",
+  "sale-banner-button": "See the offer",
+  "sale-applied-text": "%s0: %s1 off, applied at checkout.",
   "vmconsolelogtooltip-text": "View console log",
   "vmnoconsolelog-text": "This VM has not written anything to its console yet."
 }

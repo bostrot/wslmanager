@@ -1386,6 +1386,9 @@
   "vmresizeguestmanual-text": "Daha büyük bir disk konuğa daha büyük bir blok aygıtı olarak ulaşır, ancak konuk mevcut dosya sistemini korur. Konuğun içinden büyütün — macOS'ta Disk İzlencesi, Linux'ta growpart ve resize2fs.",
   "vmresizing-text": "%s yeniden boyutlandırılıyor…",
   "vmresized-text": "%s0 artık %s1 çekirdek, %s2 GB bellek ve %s3 GB disk kullanıyor. Bir sonraki başlatmada geçerli olur.",
+  "sale-banner-text": "%s0: WSL Manager Pro'da sınırlı süreyle %s1 indirim.",
+  "sale-banner-button": "Teklifi gör",
+  "sale-applied-text": "%s0: %s1 indirim, ödeme sırasında uygulanır.",
   "vmconsolelogtooltip-text": "Konsol günlüğünü görüntüle",
   "vmnoconsolelog-text": "Bu VM henüz konsoluna hiçbir şey yazmadı."
 }

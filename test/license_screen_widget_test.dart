@@ -229,6 +229,51 @@ void main() {
     expect(double.parse(clicks[1].props['amount']!), 29);
   });
 
+  testWidgets('a running sale is quoted on the website card and on its click',
+      (tester) async {
+    await tester.binding.setSurfaceSize(_kSurface);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final sale = PricingSale(
+      id: 'black-friday-2026',
+      name: 'Black Friday',
+      percentOff: 50,
+      startsAt: DateTime.utc(2026, 11, 23),
+      endsAt: DateTime.utc(2026, 12, 1, 8),
+      lookupKeys: const ['pro_windows', 'pro_macos'],
+    );
+    PricingService.quoteOverride = () async => PricingQuote(
+        currency: 'USD', prices: PricingQuote.bundled().prices, sale: sale);
+
+    await tester.pumpWidget(_page(appleHost: false, storeSellsPro: false));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('test-license-sale')), findsOneWidget);
+    // The regular price stays on the card, struck through, next to the
+    // reduced one.
+    final line = tester.widget<Text>(
+        find.byKey(const ValueKey('test-license-price')));
+    final spans = (line.textSpan! as TextSpan).children!.cast<TextSpan>();
+    expect(spans.first.text, '\$29');
+    expect(spans.first.style!.decoration, TextDecoration.lineThrough);
+
+    await tester.tap(find.byKey(const ValueKey('test-license-store-button')));
+    await tester.pumpAndSettle();
+    final click =
+        analytics.events.singleWhere((e) => e.name == 'license_buy_clicked');
+    expect(double.parse(click.props['amount']!), 14.5);
+    expect(click.props['sale'], 'black-friday-2026');
+  });
+
+  testWidgets('without a sale the card says nothing about one', (tester) async {
+    await tester.binding.setSurfaceSize(_kSurface);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(_page(appleHost: false, storeSellsPro: false));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('test-license-sale')), findsNothing);
+  });
+
   testWidgets('left undecided, the screen follows the shipped flip instant',
       (tester) async {
     // Nothing passed for storeSellsPro means LicenseManager.storeSellsPro,

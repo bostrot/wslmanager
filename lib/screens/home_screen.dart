@@ -9,6 +9,7 @@ import 'package:wsl2distromanager/components/helpers.dart';
 import 'package:wsl2distromanager/components/constants.dart';
 import 'package:wsl2distromanager/components/list.dart';
 import 'package:wsl2distromanager/components/recommendations_panel.dart';
+import 'package:wsl2distromanager/components/sale_banner.dart';
 
 import 'dart:io';
 
@@ -116,6 +117,7 @@ class _HomePageState extends State<HomePage> {
             mainAxisAlignment: MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
+              if (!isPro) const SaleBanner(),
               FutureBuilder<List<String>>(
                 future: _fetchDistroNames(),
                 builder: (context, snapshot) {
