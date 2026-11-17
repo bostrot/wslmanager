@@ -157,9 +157,11 @@ class DiskDialogContentState extends State<DiskDialogContent> {
 
     if (!mounted) return;
     setState(() => _busy = false);
-    Notify.message(result.ok
-        ? 'resizeddisk-text'.i18n([distroLabel(widget.item), size])
-        : 'resizediskfailed-text'.i18n([result.text]));
+    Notify.message(
+        result.ok
+            ? 'resizeddisk-text'.i18n([distroLabel(widget.item), size])
+            : 'resizediskfailed-text'.i18n([result.text]),
+        severity: result.ok ? InfoBarSeverity.success : InfoBarSeverity.error);
     if (result.ok) await _load();
   }
 
@@ -173,9 +175,11 @@ class DiskDialogContentState extends State<DiskDialogContent> {
 
     if (!mounted) return;
     setState(() => _busy = false);
-    Notify.message(result.ok
-        ? 'sparseset-text'.i18n([sparse ? 'true' : 'false'])
-        : 'sparsefailed-text'.i18n([result.text]));
+    Notify.message(
+        result.ok
+            ? 'sparseset-text'.i18n([sparse ? 'true' : 'false'])
+            : 'sparsefailed-text'.i18n([result.text]),
+        severity: result.ok ? InfoBarSeverity.success : InfoBarSeverity.error);
     if (result.ok) await _load();
   }
 
