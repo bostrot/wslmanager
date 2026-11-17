@@ -1453,21 +1453,23 @@ class _ComposerButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final button = FilledButton(
-      key: buttonKey,
-      onPressed: onPressed,
-      style: ButtonStyle(
-        padding: const WidgetStatePropertyAll(EdgeInsets.zero),
-        shape: WidgetStatePropertyAll(RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AiChatPanel.controlRadius))),
-      ),
-      child: Icon(icon, size: 14),
-    );
     return MergeSemantics(
       child: Tooltip(
         message: label,
-        child:
-            SizedBox.square(dimension: AiChatPanel.controlSize, child: button),
+        child: SizedBox.square(
+          dimension: AiChatPanel.controlSize,
+          child: FilledButton(
+            key: buttonKey,
+            onPressed: onPressed,
+            style: ButtonStyle(
+              padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+              shape: WidgetStatePropertyAll(RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(AiChatPanel.controlRadius))),
+            ),
+            child: Icon(icon, size: 14),
+          ),
+        ),
       ),
     );
   }

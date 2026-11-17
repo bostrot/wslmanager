@@ -559,8 +559,11 @@ void main() {
 
       await expectLater(
           service(isWindows: true).list(engine: ContainerEngine.wslc),
+          // Matched on an ASCII part: the broker decodes a non-WSL command
+          // with the system code page, which turns the test's UTF-8 "ü"
+          // into "Ã¼" on a Windows runner.
           throwsA(isA<ContainerException>().having((e) => e.message, 'message',
-              contains('nicht ausgeführt'))));
+              contains('Der WSL-Containerdienst'))));
       expect(shell.calls, hasLength(1));
     });
 
