@@ -148,6 +148,26 @@ it last ran. And a user who was never signed in to the Store — which the
 Store itself requires for a paid download, so this is a signed-out-since
 case — gets no answer until they sign in. Both go through "Get help".
 
+**A portable user who moves to the Store copy after the flip.** The MSIX is
+not isolated from the portable build's settings. A packaged desktop app
+reads and writes a file that already exists in the real
+`%APPDATA%\com.bostrot\WSL Distro Manager\`, and the portable build puts
+`shared_preferences.json` exactly there. So someone who ran an old portable
+build and then installs the free Store copy starts it with the portable
+build's `version` as the last one run. If that is older than
+`storeFreemiumVersion`, the last-ran-version clue grants Pro, and the Store
+is never asked, because it is only asked once the local clues have said no.
+The portable build never carried Pro, so this is Pro that was never paid for.
+The Windows test VM is a live example: its prefs say 1.11.0, while the
+Store says that account acquired the app at 20:20 UTC on the flip day, as a
+free download. A version-stamped build would grant Pro there.
+
+Asking the Store first, and letting a known date override the version clue,
+would close this. It would also cost the flip-morning buyers above their
+Pro, since the Store dates them after `storeFreeFromUtc` and the version
+clue is what recognises them today. Which of those two groups matters more
+is a pricing decision, not a code one, so the rule is unchanged for now.
+
 **Someone who edits the preferences file to fake an old version.** Yes. The
 repo is open source and the README says so; neither the package-identity check
 nor the licence key is protection, and this is not either. It is a nudge. The
@@ -274,8 +294,32 @@ version they last ran.
    built and exercised on Windows — `flutter build windows`, then run the
    built exe under the Store package's identity with
    `Invoke-CommandInDesktopPackage -PackageFamilyName
-   9891PhantomDevs.WSL2Manager_<hash> -AppId <AppId> -Command <exe>` to see
-   what the Store answers for the signed-in account.
+   9891PhantomDevs.WSL2Manager_rqq3vyma0b55r -AppId wsl2distromanager
+   -Command <exe>` to see what the Store answers for the signed-in account.
+
+   Exercised on 2026-09-19 against the real Store on the Windows test VM,
+   which has the 2.2.0 Store package installed. The whole path held: the
+   `StoreContext`, tied to the window, answered from a Win32 process; the
+   owned SKU's `AcquiredDate` came back; the reply crossed from the worker
+   thread to the platform thread and was parsed on the Dart side, which
+   logged `Store acquisition: StoreAcquisition(acquiredAt: 2026-09-13
+   20:20:10.000Z, isTrial: false, error: null)`. That date is after
+   `storeFreeFromUtc`, so the rule rightly declined Pro and wrote no flag;
+   only `StoreAcquisitionCheckedAt` was set. The positive branch (a date
+   before the flip) could not be shown on real data — that account never
+   bought the app — and rests on the unit tests, which feed the same code a
+   different date.
+
+   Three things to know before repeating it. Run the command from Eric's
+   interactive session (a one-shot scheduled task with an interactive
+   principal): over plain SSH there is no desktop, and the Store context
+   needs a real window. Back up `shared_preferences.json` first and restore
+   it after: every start overwrites `version`, which is exactly the
+   paid-era clue the rule reads, and the packaged app writes the same file
+   as any unpackaged run (see "Where it leaks"). And a local build reports
+   `currentVersion` 1.0.0 — only the Releaser stamps it — so the
+   last-ran-version clue declines to judge there; the Store is asked
+   whatever the prefs say, which is what makes the test possible at all.
 
 ### Rolling back
 
