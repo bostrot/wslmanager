@@ -630,6 +630,20 @@ class _PortForward {
 
 /// Service for managing AI workspace tools.
 class AiWorkspaceService {
+  /// Whether a missing environment is created without asking. On by default;
+  /// off means deleting the 'ai-workspace' distro sticks, and the page offers
+  /// to set it up again instead (bostrot/wsl2-distro-manager#321).
+  static const autoProvisionPrefKey = 'AiWorkspaceAutoProvision';
+
+  /// The i18n key [ensureDistro] throws when the environment is missing and
+  /// [autoProvision] is off.
+  static const notProvisionedKey = 'ai-workspace-not-provisioned-text';
+
+  static bool get autoProvision => prefs.getBool(autoProvisionPrefKey) ?? true;
+
+  static Future<void> setAutoProvision(bool value) =>
+      prefs.setBool(autoProvisionPrefKey, value);
+
   final ExecutionBroker _broker;
   final WorkspaceRuntime _runtime;
   final Map<AiWorkspaceTool, ToolState> _toolStates = {};
@@ -765,7 +779,8 @@ class AiWorkspaceService {
   // -----------------------------------------------------------------------
 
   /// Creates the distro if missing. With [forUninstall] it must already
-  /// exist and the call fails instead.
+  /// exist and the call fails instead, and with [autoProvision] off it
+  /// throws [notProvisionedKey] so the user decides via [setUpEnvironment].
   Future<void> ensureDistro({bool forUninstall = false}) async {
     if (_distroReady) return;
 
@@ -777,6 +792,10 @@ class AiWorkspaceService {
     if (forUninstall) {
       throw Exception(
           'AI workspace environment is not installed. Cannot uninstall.');
+    }
+
+    if (!autoProvision && _runtime.provisionCreates) {
+      throw Exception(notProvisionedKey);
     }
 
     await _runtime.provision(_broker,
@@ -1580,7 +1599,14 @@ class AiWorkspaceService {
     if (_toolStates.isEmpty) {
       seedToolStates();
     }
-    await ensureDistro();
+    try {
+      await ensureDistro();
+    } on Exception catch (e) {
+      // A distro the user deleted with automatic setup off is a choice, not
+      // a startup failure to log on every launch; the page offers setup.
+      if (e.toString().contains(notProvisionedKey)) return;
+      rethrow;
+    }
     await Future.wait(AiWorkspaceTool.values.map(refreshStatus));
   }
 

@@ -52,6 +52,11 @@ abstract class WorkspaceRuntime {
   /// Whether the environment is already provisioned.
   Future<bool> exists(ExecutionBroker broker);
 
+  /// Whether [provision] really creates the environment, rather than only
+  /// explaining why it cannot. Only those runtimes honour
+  /// `AiWorkspaceService.autoProvision`.
+  bool get provisionCreates => true;
+
   /// Provision the environment, or throw with guidance when it cannot be
   /// created automatically.
   Future<void> provision(ExecutionBroker broker,
@@ -280,6 +285,9 @@ class AppleWorkspaceRuntime extends WorkspaceRuntime {
     _probeResult = probe.isSuccess;
     return _probeResult;
   }
+
+  @override
+  bool get provisionCreates => false;
 
   @override
   Future<void> provision(ExecutionBroker broker,

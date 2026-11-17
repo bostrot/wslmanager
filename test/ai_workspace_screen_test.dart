@@ -608,6 +608,37 @@ void main() {
     expect(find.byKey(const ValueKey('test-workspace-setup')), findsNothing);
   });
 
+  // Automatic setup off in Settings: a deleted 'ai-workspace' distro stays
+  // deleted, and the page asks before creating it (bostrot/wsl2-distro-manager#321).
+  testWidgets('a deleted distro with automatic setup off offers to set it up',
+      (tester) async {
+    tester.view.physicalSize = _kSurface;
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await AiWorkspaceService.setAutoProvision(false);
+    final runtime = _GuidedFakeRuntime(errorKey: 'must not be provisioned');
+    final guided = AiWorkspaceService(
+      broker: ExecutionBroker(shell: testShell),
+      reachabilityChecker: (_) async => true,
+      runtime: runtime,
+    );
+
+    await tester.pumpWidget(_page(guided));
+    await tester.pumpAndSettle();
+
+    expect(find.text(AiWorkspaceService.notProvisionedKey.i18n()),
+        findsOneWidget);
+    expect(find.text('ai-workspace-setup-now-btn'.i18n()), findsOneWidget);
+    expect(find.text('retry-text'.i18n()), findsNothing);
+    expect(runtime.setUpCalls, 0);
+
+    await tester.tap(find.byKey(const ValueKey('test-workspace-setup')));
+    await tester.pumpAndSettle();
+
+    expect(runtime.setUpCalls, 1);
+    expect(find.byKey(const ValueKey('test-workspace-setup')), findsNothing);
+  });
+
   testWidgets('a running VM that does not answer offers repair, not install',
       (tester) async {
     // The Home screen listed 'ai-workspace' as running with an address while

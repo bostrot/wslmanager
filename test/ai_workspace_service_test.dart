@@ -198,6 +198,81 @@ void main() {
           reason: 'Should attempt to install Ubuntu',
         );
       });
+
+      // Deleting the distro used to be undone on the next start
+      // (bostrot/wsl2-distro-manager#321).
+      test('with automatic setup off, a missing distro is not recreated',
+          () async {
+        await AiWorkspaceService.setAutoProvision(false);
+        testShell.stdoutData = 'Alpine\nUbuntu';
+
+        await expectLater(
+          service.ensureDistro(),
+          throwsA(predicate((e) =>
+              e.toString().contains(AiWorkspaceService.notProvisionedKey))),
+        );
+        expect(
+          testShell.allCommands.any((cmd) => cmd.contains('--install')),
+          false,
+        );
+      });
+
+      test('with automatic setup off, an existing distro is still used',
+          () async {
+        await AiWorkspaceService.setAutoProvision(false);
+        testShell.stdoutData = 'ai-workspace';
+
+        await service.ensureDistro();
+        expect(testShell.lastCommand, ['wsl', '--list', '--quiet']);
+      });
+
+      test('with automatic setup off, the explicit setup still creates it',
+          () async {
+        await AiWorkspaceService.setAutoProvision(false);
+        testShell.stdoutData = 'Alpine\nUbuntu';
+
+        await service.setUpEnvironment();
+        expect(
+          testShell.allCommands.any((cmd) => cmd.contains('--install')),
+          true,
+        );
+        // Ready now, so the next call neither probes nor throws.
+        testShell.allCommands.clear();
+        await service.ensureDistro();
+        expect(testShell.allCommands, isEmpty);
+      });
+
+      test('the startup probe stops quietly when setup is off and missing',
+          () async {
+        await AiWorkspaceService.setAutoProvision(false);
+        testShell.stdoutData = 'Alpine\nUbuntu';
+
+        await service.ensureInitialized();
+        // Only the distro list ran: no install, no per-tool probe.
+        expect(testShell.allCommands, [
+          ['wsl', '--list', '--quiet']
+        ]);
+        expect(service.toolStates.length, AiWorkspaceTool.values.length);
+      });
+
+      test('automatic setup defaults to on', () {
+        expect(AiWorkspaceService.autoProvision, isTrue);
+      });
+
+      test('a runtime that cannot provision keeps its own guidance', () async {
+        await AiWorkspaceService.setAutoProvision(false);
+        final vmLike = AiWorkspaceService(
+          broker: broker,
+          reachabilityChecker: (_) async => true,
+          runtime: _GuidanceOnlyRuntime(),
+        );
+
+        await expectLater(
+          vmLike.ensureDistro(),
+          throwsA(predicate((e) =>
+              e.toString().contains('ai-workspace-vm-missing-text'))),
+        );
+      });
     });
 
     group('init', () {
@@ -2826,4 +2901,20 @@ void main() {
             ? 'no bash available to run the probe scripts'
             : null);
   });
+}
+
+/// The macOS shape: [provision] only explains, so the automatic-setup switch
+/// must not hide that explanation.
+class _GuidanceOnlyRuntime extends WslWorkspaceRuntime {
+  @override
+  bool get provisionCreates => false;
+
+  @override
+  Future<bool> exists(ExecutionBroker broker) async => false;
+
+  @override
+  Future<void> provision(ExecutionBroker broker,
+      {required void Function(String key) notify}) async {
+    throw Exception('ai-workspace-vm-missing-text');
+  }
 }

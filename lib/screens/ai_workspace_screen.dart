@@ -281,6 +281,7 @@ class _AiWorkspacePageState extends State<AiWorkspacePage> {
       'ai-workspace-vm-missing-text',
       'ai-workspace-vm-stopped-text',
       'ai-workspace-vm-unreachable-text',
+      AiWorkspaceService.notProvisionedKey,
     };
     _errorKey = known.contains(raw) ? raw : null;
     return known.contains(raw) ? raw.i18n() : raw;
@@ -291,7 +292,8 @@ class _AiWorkspacePageState extends State<AiWorkspacePage> {
   bool get _setupCanFix =>
       _errorKey == 'ai-workspace-vm-missing-text' ||
       _errorKey == 'ai-workspace-vm-stopped-text' ||
-      _errorKey == 'ai-workspace-vm-unreachable-text';
+      _errorKey == 'ai-workspace-vm-unreachable-text' ||
+      _errorKey == AiWorkspaceService.notProvisionedKey;
 
   Future<void> _runGuidedSetup() async {
     setState(() => _settingUp = true);
@@ -737,6 +739,11 @@ class _AiWorkspacePageState extends State<AiWorkspacePage> {
     } else if (_errorKey == 'ai-workspace-vm-unreachable-text') {
       body = 'ai-workspace-repair-text'.i18n();
       label = 'ai-workspace-repair-btn'.i18n();
+    } else if (_errorKey == AiWorkspaceService.notProvisionedKey) {
+      // Automatic setup is off in Settings, so the distro stays deleted
+      // until the user asks for it here.
+      body = AiWorkspaceService.notProvisionedKey.i18n();
+      label = 'ai-workspace-setup-now-btn'.i18n();
     } else {
       body = 'ai-workspace-setup-text'.i18n();
       label = 'ai-workspace-setup-btn'.i18n();

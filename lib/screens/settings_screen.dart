@@ -120,6 +120,7 @@ class SettingsPageState extends State<SettingsPage> {
   bool _useRemoteWsl = false;
   bool _vmGreeting = true;
   bool _aiEnabled = true;
+  bool _aiWorkspaceAutoProvision = true;
   bool _mcpEnabled = false;
   bool _mcpTokenVisible = false;
   bool _tunnelStarting = false;
@@ -375,6 +376,7 @@ class SettingsPageState extends State<SettingsPage> {
     _useRemoteWsl = prefs.getBool('UseRemoteWSL') ?? false;
     _vmGreeting = prefs.getBool(GuestGreeting.enabledPrefKey) ?? true;
     _aiEnabled = AiService.featuresEnabled;
+    _aiWorkspaceAutoProvision = AiWorkspaceService.autoProvision;
     String? remoteTarget = prefs.getString('RemoteWSLTarget');
     if (remoteTarget != null && remoteTarget.trim().isNotEmpty) {
       _remoteWslTargetController.text = remoteTarget;
@@ -1224,6 +1226,31 @@ class SettingsPageState extends State<SettingsPage> {
             ]),
           ),
         ),
+        // Only the WSL distro is created unasked; the macOS workspace VM is
+        // always set up from the AI Workspace page
+        // (bostrot/wsl2-distro-manager#321).
+        if (!isAppleHost || _useRemoteWsl)
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: InfoLabel(
+              label: 'ai-workspace-auto-provision-text'.i18n(),
+              labelStyle: const TextStyle(fontWeight: FontWeight.w500),
+              child: Row(children: [
+                ToggleSwitch(
+                  key: const ValueKey('test-ai-workspace-auto-provision'),
+                  checked: _aiWorkspaceAutoProvision,
+                  onChanged: (value) {
+                    setState(() => _aiWorkspaceAutoProvision = value);
+                    AiWorkspaceService.setAutoProvision(value);
+                  },
+                ),
+                const SizedBox(width: 10.0),
+                Expanded(
+                    child:
+                        Text('ai-workspace-auto-provision-info-text'.i18n())),
+              ]),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.all(8.0),
           child: InfoLabel(
