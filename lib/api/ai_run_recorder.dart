@@ -1,5 +1,7 @@
 // What the AI assistant changed on the user's machine during one chat turn,
-// filed as a snippet once the turn ends.
+// filed as a snippet once the turn ends. One chat session keeps one
+// snippet: the first turn that changes something creates it, and every later
+// turn of the same conversation appends its own section to it ([appendTo]).
 //
 // The transcript only says "ran vm_create_linux" — no arguments, no output
 // — and it is one long scroll that is gone after "Clear chat". A run that
@@ -203,6 +205,25 @@ class AiRunRecorder {
         'reported');
     b.writeln('# below. Run this against a fresh instance to repeat the '
         'shell part.');
+    _writeCalls(b);
+    return b.toString();
+  }
+
+  /// This turn as a section appended to the session's snippet: its own
+  /// request and instances, then its calls numbered from 1. The section
+  /// carries its instances because the snippet's single `distro` field
+  /// cannot say which step ran where once a session touched several.
+  String toFollowUpSection() {
+    final b = StringBuffer();
+    b.writeln('# --- Follow-up on $_stamp ---');
+    b.writeln(_comment('Request: ${request.trim()}'));
+    final t = targets;
+    if (t.isNotEmpty) b.writeln(_comment('Instances: ${t.join(', ')}'));
+    _writeCalls(b);
+    return b.toString();
+  }
+
+  void _writeCalls(StringBuffer b) {
     for (var i = 0; i < calls.length; i++) {
       final call = calls[i];
       b.writeln();
@@ -215,7 +236,38 @@ class AiRunRecorder {
         b.writeln(_comment(call.result, indent: '   '));
       }
     }
-    return b.toString();
+  }
+
+  /// [existing] — the snippet an earlier turn of this chat filed — with this
+  /// turn appended. Name and description stay those of the first turn; the
+  /// content keeps whatever is there (edits made in the editor included) and
+  /// gains a section at the end; the instances are the union, first-seen
+  /// order, so the snippet still lists every instance the session touched.
+  QuickActionItem appendTo(QuickActionItem existing) {
+    final instances = <String>[];
+    void add(Object? value) {
+      if (value is String && value.trim().isNotEmpty) {
+        if (!instances.contains(value.trim())) instances.add(value.trim());
+      } else if (value is Iterable) {
+        value.forEach(add);
+      }
+    }
+
+    add(existing.distro);
+    add(targets);
+    return QuickActionItem(
+      name: existing.name,
+      description: existing.description,
+      version: existing.version,
+      author: existing.author,
+      license: existing.license,
+      git: existing.git,
+      distro: instances.isEmpty
+          ? ''
+          : (instances.length == 1 ? instances.single : instances),
+      env: existing.env,
+      content: '${existing.content.trimRight()}\n\n${toFollowUpSection()}',
+    );
   }
 
   /// The snippet as it would be saved; [existingNames] keeps the name unique.
@@ -234,10 +286,16 @@ class AiRunRecorder {
   }
 
   /// Files the record on the Snippets screen and returns it, or null when
-  /// nothing worth recording ran.
-  QuickActionItem? save() {
+  /// nothing worth recording ran. With [sessionSnippet] — the name of the
+  /// snippet an earlier turn of the same chat filed — the turn is appended
+  /// to that snippet instead, unless it has been deleted since.
+  QuickActionItem? save({String? sessionSnippet}) {
     if (isEmpty) return null;
-    final item = toSnippet(existingNames: QuickAction().names());
+    final existing =
+        sessionSnippet == null ? null : QuickAction().byName(sessionSnippet);
+    final item = existing != null
+        ? appendTo(existing)
+        : toSnippet(existingNames: QuickAction().names());
     QuickAction.addToPrefs(item);
     return item;
   }

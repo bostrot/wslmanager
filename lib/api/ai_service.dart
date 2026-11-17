@@ -575,14 +575,29 @@ You also have a task queue (todo_list, todo_add, todo_set_done, todo_remove). Wh
     return '';
   }
 
-  /// Saves the run's record as a snippet (ai-tasks#77) and leaves a
-  /// `snippet` note carrying its name in the transcript, which the panel
-  /// renders as a link to the editor.
+  /// The snippet this chat session records into: the newest `snippet` note
+  /// in [transcript] that still names a saved snippet. The note is the
+  /// session's id — it is persisted with the transcript, filed with it by
+  /// "New chat" and brought back by [restoreHistory] — so a reopened chat
+  /// keeps adding to its own snippet, and a new or cleared one, having no
+  /// note, starts the next.
+  static String? sessionSnippet(List<AiMessage> transcript) {
+    final saved = QuickAction().names();
+    for (final m in transcript.reversed) {
+      if (m.role == 'snippet' && saved.contains(m.content)) return m.content;
+    }
+    return null;
+  }
+
+  /// Saves the run's record as a snippet (ai-tasks#77) — the session's
+  /// existing one when an earlier turn filed it — and leaves a `snippet`
+  /// note carrying its name in the transcript, which the panel renders as a
+  /// link to the editor.
   void _fileRun(AiRunRecorder recorder, List<AiMessage> transcript,
       void Function()? persist, void Function()? onUpdate) {
     final QuickActionItem? item;
     try {
-      item = recorder.save();
+      item = recorder.save(sessionSnippet: sessionSnippet(transcript));
     } catch (e) {
       if (kDebugMode) debugPrint('Recording the AI run failed: $e');
       return;

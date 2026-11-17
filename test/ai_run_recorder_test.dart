@@ -333,5 +333,52 @@ void main() {
         'ai-run-dev-2026-09-14-1007-2',
       ]);
     });
+
+    test('a later turn of the same session appends to its snippet', () {
+      final first = AiRunRecorder(request: 'set up dev', startedAt: at)
+        ..record(runCommand, {'distro': 'dev', 'command': 'echo a'}, 'a');
+      final name = first.save()!.name;
+
+      final later = DateTime(2026, 9, 14, 10, 12);
+      final second = AiRunRecorder(request: 'now web', startedAt: later)
+        ..record(runCommand, {'distro': 'web', 'command': 'echo b'}, 'b')
+        ..record(runCommand,
+            {'distro': 'web', 'command': 'echo c', 'user': 'eric'}, 'c');
+      final saved = second.save(sessionSnippet: name)!;
+
+      expect(saved.name, name);
+      final stored = QuickAction().getFromPrefs();
+      expect(stored, hasLength(1));
+      final item = stored.single;
+      expect(item.description, 'set up dev');
+      expect(item.distro, ['dev', 'web']);
+      final c = item.content;
+      expect(c.indexOf('echo a'), lessThan(c.indexOf('echo b')));
+      expect(c.indexOf('echo b'), lessThan(c.indexOf('echo c')));
+      expect(
+          c,
+          contains('# --- Follow-up on 2026-09-14 10:12 ---\n'
+              '# Request: now web\n'
+              '# Instances: web\n'));
+      // Per-command details survive the append.
+      expect(c, contains("su -s /bin/sh 'eric' -c 'echo c'"));
+      expect(c, contains('#    b'));
+    });
+
+    test('appending keeps what the user edited in the snippet', () {
+      final first = AiRunRecorder(request: 'x', startedAt: at)
+        ..record(runCommand, {'distro': 'dev', 'command': 'echo a'}, 'a');
+      final item = first.save()!;
+      QuickAction.addToPrefs(item..content = '#!/bin/bash\necho edited\n');
+
+      AiRunRecorder(request: 'y', startedAt: at)
+        ..record(runCommand, {'distro': 'dev', 'command': 'echo b'}, 'b')
+        ..save(sessionSnippet: item.name);
+
+      final c = QuickAction().byName(item.name)!.content;
+      expect(c, startsWith('#!/bin/bash\necho edited\n\n# --- Follow-up'));
+      expect(c, contains('echo b'));
+      expect(QuickAction().byName(item.name)!.distro, 'dev');
+    });
   });
 }

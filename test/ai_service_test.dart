@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wsl2distromanager/api/ai_chat_sessions.dart';
 import 'package:wsl2distromanager/api/ai_service.dart';
 import 'package:wsl2distromanager/api/experimental_features.dart';
 import 'package:wsl2distromanager/api/cancellation.dart';
@@ -929,6 +930,169 @@ void main() {
       expect(reply, 'made');
       expect(QuickAction().getFromPrefs(), isEmpty);
       expect(transcript.map((m) => m.role).toList(), ['user', 'tool']);
+    });
+
+    group('one chat session keeps one snippet', () {
+      final runCommand = fakeTool('wsl_run_command',
+          recording: const ToolRecording(target: 'distro', shell: 'command'));
+
+      /// Answers each turn with one tool-call response running [commands]
+      /// (as `distro`/`command` pairs), then a plain reply.
+      void script(AiService ai, List<List<List<String>>> turns) {
+        final bodies = <Map<String, dynamic>>[];
+        for (final turn in turns) {
+          bodies.add(toolCallTurn([
+            for (final c in turn)
+              {
+                'name': 'wsl_run_command',
+                'args': json.encode({'distro': c[0], 'command': c[1]}),
+              }
+          ]));
+          bodies.add({
+            'choices': [
+              {
+                'message': {'role': 'assistant', 'content': 'done'}
+              }
+            ]
+          });
+        }
+        var i = 0;
+        ai.dioForTesting.httpClientAdapter =
+            _RecordingAdapter((_) => jsonBody(bodies[i++]));
+      }
+
+      List<String> commandLines(String content) => content
+          .split('\n')
+          .where((l) => l.startsWith('echo '))
+          .toList();
+
+      setUp(() => AiChatSessions.instance.clear());
+
+      test('several turns and tool calls in one chat file one snippet with '
+          'every command in order', () async {
+        final ai = await proService([runCommand]);
+        script(ai, [
+          [
+            ['dev', 'echo one'],
+            ['dev', 'echo two'],
+          ],
+          [
+            ['dev', 'echo three'],
+          ],
+          [
+            ['web', 'echo four'],
+          ],
+        ]);
+
+        await ai.sendMessage('first');
+        await ai.sendMessage('second');
+        await ai.sendMessage('third');
+
+        final snippets = QuickAction().getFromPrefs();
+        expect(snippets, hasLength(1));
+        final snippet = snippets.single;
+        expect(commandLines(snippet.content),
+            ['echo one', 'echo two', 'echo three', 'echo four']);
+        // The first turn names and describes it; each instance the session
+        // touched is listed, and each follow-up says where it ran.
+        expect(snippet.description, 'first');
+        expect(snippet.name, startsWith('ai-run-dev-'));
+        expect(snippet.distro, ['dev', 'web']);
+        expect(snippet.content, contains('# Request: second'));
+        expect(snippet.content, contains('# Request: third\n# Instances: web'));
+        expect('#!/bin/bash'.allMatches(snippet.content), hasLength(1));
+        // Every turn still links to it.
+        final notes = ai.conversationHistory
+            .where((m) => m.role == 'snippet')
+            .map((m) => m.content)
+            .toList();
+        expect(notes, [snippet.name, snippet.name, snippet.name]);
+      });
+
+      test('a new chat starts a second snippet', () async {
+        final ai = await proService([runCommand]);
+        script(ai, [
+          [
+            ['dev', 'echo one'],
+          ],
+          [
+            ['dev', 'echo two'],
+          ],
+        ]);
+
+        await ai.sendMessage('first chat');
+        // What "New chat" does: file the transcript, then clear it.
+        AiChatSessions.instance.archive(ai.conversationHistory);
+        ai.clearHistory();
+        await ai.sendMessage('second chat');
+
+        final snippets = QuickAction().getFromPrefs();
+        expect(snippets, hasLength(2));
+        expect(snippets.map((s) => s.description),
+            ['first chat', 'second chat']);
+        expect(commandLines(snippets[0].content), ['echo one']);
+        expect(commandLines(snippets[1].content), ['echo two']);
+      });
+
+      test('a chat reopened from history appends to its own snippet',
+          () async {
+        final ai = await proService([runCommand]);
+        script(ai, [
+          [
+            ['dev', 'echo one'],
+          ],
+          [
+            ['web', 'echo two'],
+          ],
+          [
+            ['dev', 'echo three'],
+          ],
+        ]);
+
+        await ai.sendMessage('first chat');
+        AiChatSessions.instance.archive(ai.conversationHistory);
+        ai.clearHistory();
+        await ai.sendMessage('second chat');
+
+        // Reopen the first chat, as the history flyout does.
+        final firstId = AiChatSessions.instance
+            .list()
+            .singleWhere((s) => s.title == 'first chat')
+            .id;
+        final restored = AiChatSessions.instance
+            .switchTo(firstId, ai.conversationHistory)!;
+        ai.restoreHistory(restored);
+        await ai.sendMessage('back to the first');
+
+        final snippets = QuickAction().getFromPrefs();
+        expect(snippets, hasLength(2));
+        final first = snippets.singleWhere((s) => s.description == 'first chat');
+        final second =
+            snippets.singleWhere((s) => s.description == 'second chat');
+        expect(commandLines(first.content), ['echo one', 'echo three']);
+        expect(commandLines(second.content), ['echo two']);
+      });
+
+      test('a session whose snippet was deleted starts a new one', () async {
+        final ai = await proService([runCommand]);
+        script(ai, [
+          [
+            ['dev', 'echo one'],
+          ],
+          [
+            ['dev', 'echo two'],
+          ],
+        ]);
+
+        await ai.sendMessage('first');
+        QuickAction.removeFromPrefs(QuickAction().getFromPrefs().single);
+        await ai.sendMessage('second');
+
+        final snippets = QuickAction().getFromPrefs();
+        expect(snippets, hasLength(1));
+        expect(snippets.single.description, 'second');
+        expect(commandLines(snippets.single.content), ['echo two']);
+      });
     });
   });
 }
