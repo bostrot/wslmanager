@@ -319,6 +319,7 @@
   "ai-assistant-placeholder": "WSL에 관해 질문하기...",
   "ai-chat-button-text": "AI로 제어",
   "ai-send-text": "보내기",
+  "ai-stop-text": "생성 중지",
   "ai-new-chat-text": "새 채팅",
   "ai-chat-history-text": "이전 채팅",
   "ai-chat-untitled-text": "제목 없는 채팅",

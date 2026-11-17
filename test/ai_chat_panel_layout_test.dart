@@ -12,9 +12,11 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wsl2distromanager/api/ai_service.dart';
+import 'package:wsl2distromanager/api/todo_store.dart';
 import 'package:wsl2distromanager/api/vm/vm_platform.dart';
 import 'package:wsl2distromanager/api/wsl.dart';
 import 'package:wsl2distromanager/components/ai_chat_panel.dart';
+import 'package:wsl2distromanager/components/beta_badge.dart';
 import 'package:wsl2distromanager/components/helpers.dart';
 import 'package:wsl2distromanager/components/notify.dart';
 
@@ -97,7 +99,7 @@ void main() {
 
       await tester.enterText(find.byType(TextBox).first, 'hello');
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(Button, 'ai-send-text'));
+      await tester.tap(find.byKey(const ValueKey('test-chat-send')));
       await tester.pumpAndSettle();
 
       // Blocking replaces the standing notice rather than doubling it. Under
@@ -108,6 +110,86 @@ void main() {
       expect(bar, findsOneWidget);
       expect(tester.widget<InfoBar>(bar).isLong, isTrue);
       expectButtonBelowTitle(tester, bar, 'ai-chat-pro-required-text');
+    });
+  });
+
+  // One geometry for the whole panel: the header's actions, the composer's
+  // Send and the task row's buttons used to be three sizes, with a text Send
+  // and a separate Cancel beside a box of yet another height
+  // (user-reported).
+  group('AI dock geometry', () {
+    testWidgets('header actions are one size and on one line',
+        (tester) async {
+      await pumpDock(tester);
+
+      final rects = [
+        for (final key in ['test-chat-new', 'test-chat-clear'])
+          tester.getRect(find.descendant(
+              of: find.byKey(ValueKey(key)),
+              matching: find.byType(IconButton))),
+      ];
+      for (final rect in rects) {
+        expect(rect.size, const Size.square(AiChatPanel.controlSize));
+        expect(rect.center.dy, closeTo(rects.first.center.dy, 0.5));
+      }
+    });
+
+    testWidgets('the title gets all the room the actions leave',
+        (tester) async {
+      await pumpDock(tester);
+
+      // A Flexible title beside a Spacer split the spare width in half, so
+      // "AI Assistant" was cut to "AI Assis…" with room to spare. Without a
+      // localization delegate the title is its (long) key, which is cut
+      // either way — what matters is that the badge ends where the actions
+      // start, i.e. no width was handed to anything else.
+      final badge = tester.getRect(find.byType(BetaBadge));
+      final firstAction = tester.getRect(find.descendant(
+          of: find.byKey(const ValueKey('test-chat-new')),
+          matching: find.byType(IconButton)));
+      expect(firstAction.left - badge.right, lessThanOrEqualTo(4.0));
+    });
+
+    testWidgets('Send sits inside the composer at the control size',
+        (tester) async {
+      await pumpDock(tester);
+
+      final send = tester.getRect(find.byKey(const ValueKey('test-chat-send')));
+      final input =
+          tester.getRect(find.byKey(const ValueKey('test-chat-input')));
+      expect(send.size, const Size.square(AiChatPanel.controlSize));
+      expect(input.height, greaterThanOrEqualTo(AiChatPanel.controlSize));
+      // Flush with the box's bottom edge, to the right of it.
+      expect(send.bottom, closeTo(input.bottom, 0.5));
+      expect(send.left, greaterThan(input.right));
+      expect(send.right, lessThanOrEqualTo(dockWidth));
+    });
+
+    testWidgets('a task is added from the button as well as Enter',
+        (tester) async {
+      await pumpDock(tester);
+      addTearDown(() {
+        for (final t in TodoStore.instance.items) {
+          TodoStore.instance.remove(t.id);
+        }
+      });
+
+      await tester.tap(find.byKey(const ValueKey('test-chat-tasks-toggle')));
+      await tester.pumpAndSettle();
+      final add = find.descendant(
+          of: find.byKey(const ValueKey('test-chat-task-add')),
+          matching: find.byType(IconButton));
+      expect(tester.widget<IconButton>(add).onPressed, isNull,
+          reason: 'nothing to add yet');
+
+      await tester.enterText(
+          find.byKey(const ValueKey('test-chat-task-input')), 'check disk');
+      await tester.pumpAndSettle();
+      await tester.tap(add);
+      await tester.pumpAndSettle();
+
+      expect(TodoStore.instance.items.map((t) => t.text), ['check disk']);
+      expect(find.text('check disk'), findsOneWidget);
     });
   });
 }

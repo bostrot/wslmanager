@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/rendering.dart'
     show
@@ -72,6 +74,30 @@ class AiChatPanel extends StatefulWidget {
   /// How the hint under the box spells that chord.
   static String get sendModifierLabel => sendsWithCommand ? '⌘' : 'Ctrl';
 
+  /// The height of every control in the panel — the composer's send/stop
+  /// button, the header's actions, the task row's buttons. Each used to
+  /// take its own default, so the box, Send and Cancel next to it were three
+  /// different heights (user-reported).
+  static const double controlSize = 32;
+
+  /// The corner radius those controls share. Containers that hold one of
+  /// them (the composer card) add their inset, so the corners stay
+  /// concentric.
+  static const double controlRadius = 8;
+
+  /// Message bubbles' corner radius; the corner nearest the speaker is
+  /// tightened to [controlRadius] / 2 so the bubble points at its side.
+  static const double bubbleRadius = 12;
+
+  /// Body text in bubbles and the composer.
+  static const double bodyFontSize = 13;
+
+  /// Secondary text: tool chips, task rows, the run status.
+  static const double metaFontSize = 12;
+
+  /// The widest the transcript and composer get when the dock is expanded.
+  static const double readableWidth = 820;
+
   @override
   State<AiChatPanel> createState() => _AiChatPanelState();
 }
@@ -86,6 +112,7 @@ class _AiChatPanelState extends State<AiChatPanel> {
     onKeyEvent: _onInputKey,
   );
   final TextEditingController _todoInputController = TextEditingController();
+  final FocusNode _todoInputFocus = FocusNode(debugLabel: 'AI task input');
   final ScrollController _scrollController = ScrollController();
   final FlyoutController _sessionsFlyout = FlyoutController();
   final _TranscriptSelectionDelegate _selectionDelegate =
@@ -191,6 +218,13 @@ class _AiChatPanelState extends State<AiChatPanel> {
     _todos.addListener(_onTodosChanged);
     _ai.transcriptRevision.addListener(_onTranscriptChanged);
     _sessions.addListener(_onSessionsChanged);
+    // The cards around the two inputs draw the focus ring themselves.
+    _inputFocus.addListener(_onFocusChanged);
+    _todoInputFocus.addListener(_onFocusChanged);
+  }
+
+  void _onFocusChanged() {
+    if (mounted) setState(() {});
   }
 
   /// A chat was filed away or reopened: the history flyout and the header
@@ -394,9 +428,12 @@ class _AiChatPanelState extends State<AiChatPanel> {
 
     return Column(
       children: [
-        // Header
+        // Header: one 48px bar, every action the same 32px square. The
+        // buttons used to mix 12 and 14px glyphs with 4 and 8px gaps, so the
+        // row looked hand-placed (user-reported).
         Container(
-          padding: const EdgeInsets.all(12),
+          height: 48,
+          padding: const EdgeInsets.only(left: 14, right: 8),
           decoration: BoxDecoration(
             border: Border(
               bottom: BorderSide(
@@ -411,33 +448,39 @@ class _AiChatPanelState extends State<AiChatPanel> {
                   size: 16, color: FluentTheme.of(context).accentColor),
               const SizedBox(width: 8),
               // The badge hugs the title; the leftover space sits between
-              // the pair and the action buttons, not inside it.
-              Flexible(
-                child: Text(
-                  _sandbox == null
-                      ? 'ai-assistant-title'.i18n()
-                      : 'sandbox-chat-title'
-                          .i18n([_shortSandboxName(_sandbox!.distro)]),
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: FluentTheme.of(context).accentColor,
-                  ),
+              // the pair and the action buttons, not inside it. One Expanded
+              // rather than a Flexible title beside a Spacer: those split the
+              // spare width in half, and the title was cut to "AI Assis…"
+              // with room to spare.
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        _sandbox == null
+                            ? 'ai-assistant-title'.i18n()
+                            : 'sandbox-chat-title'
+                                .i18n([_shortSandboxName(_sandbox!.distro)]),
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const BetaBadge(),
+                  ],
                 ),
               ),
-              const SizedBox(width: 6),
-              const BetaBadge(),
-              const Spacer(),
               const SizedBox(width: 4),
               // Start a fresh context without losing the running thread:
               // it is filed under "Previous chats" (ai-tasks#104).
               if (_hasSessions)
-                NamedIconButton(
+                _PanelIconButton(
                   key: const ValueKey('test-chat-new'),
                   label: 'ai-new-chat-text'.i18n(),
                   icon: FluentIcons.add,
-                  iconSize: 14,
                   onPressed: (_busy || history.isEmpty) ? null : _newChat,
                 ),
               // Switch between the app assistant, sandbox sessions and the
@@ -445,7 +488,7 @@ class _AiChatPanelState extends State<AiChatPanel> {
               // of them can be reopened.
               _sessionsButton(context),
               if (widget.onToggleExpanded != null)
-                NamedIconButton(
+                _PanelIconButton(
                   key: const ValueKey('test-chat-expand'),
                   label: (widget.expanded
                           ? 'ai-chat-collapse-text'
@@ -454,20 +497,20 @@ class _AiChatPanelState extends State<AiChatPanel> {
                   icon: widget.expanded
                       ? FluentIcons.back_to_window
                       : FluentIcons.full_screen,
+                  // The chrome glyphs are drawn larger in the font; 12px
+                  // matches the others' optical size.
                   iconSize: 12,
                   onPressed: widget.onToggleExpanded,
                 ),
               // No quota counter anymore — chat runs on the user's own API
               // key, so usage is between them and their provider.
-              const SizedBox(width: 8),
               // One mis-click used to erase the whole conversation with no
               // undo, and the control stayed live over an empty history
               // (audit PS-35).
-              NamedIconButton(
+              _PanelIconButton(
                 key: const ValueKey('test-chat-clear'),
                 label: 'clearchat-text'.i18n(),
                 icon: FluentIcons.delete,
-                iconSize: 14,
                 onPressed: history.isEmpty
                     ? null
                     : () => dialog(
@@ -489,16 +532,14 @@ class _AiChatPanelState extends State<AiChatPanel> {
                           },
                         ),
               ),
-              if (widget.onClose != null) ...[
-                const SizedBox(width: 4),
-                NamedIconButton(
+              if (widget.onClose != null)
+                _PanelIconButton(
                   key: const ValueKey('test-chat-close'),
                   label: 'close-text'.i18n(),
                   icon: FluentIcons.chrome_close,
                   iconSize: 12,
                   onPressed: widget.onClose,
                 ),
-              ],
             ],
           ),
         ),
@@ -535,22 +576,23 @@ class _AiChatPanelState extends State<AiChatPanel> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        FluentIcons.chat,
+                      _AssistantAvatar(
                         size: 48,
-                        color: disabledTextColor(context),
+                        icon: _sandbox == null
+                            ? FluentIcons.chat
+                            : FluentIcons.cube_shape,
                       ),
                       const SizedBox(height: 12),
                       Padding(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 24.0),
+                        padding: const EdgeInsets.symmetric(horizontal: 32.0),
                         child: Text(
                           (_sandbox == null
                                   ? 'ai-assistant-hint'
                                   : 'sandbox-chat-hint-text')
                               .i18n(),
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: AiChatPanel.bodyFontSize,
+                            height: 1.4,
                             color: secondaryTextColor(context),
                           ),
                           textAlign: TextAlign.center,
@@ -575,66 +617,32 @@ class _AiChatPanelState extends State<AiChatPanel> {
                   key: const ValueKey('test-chat-transcript'),
                   child: SelectionContainer(
                     delegate: _selectionDelegate,
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.all(12),
-                      // One extra slot: the reply currently streaming in, drawn
-                      // live under the history (plan item 6, streaming).
-                      itemCount: history.length + 1,
-                      itemBuilder: (context, index) {
-                        if (index == history.length) {
-                          final live = _ai.streamingText.value;
-                          if (!_busy || live.isEmpty) {
-                            return const SizedBox.shrink();
-                          }
-                          return _TranscriptEntry(
-                              child: _buildMessageBubble(AiMessage(
-                            role: 'assistant',
-                            content: live,
-                            timestamp: DateTime.now(),
-                          )));
-                        }
-                        return _TranscriptEntry(
-                            child: _buildMessageBubble(history[index]));
-                      },
-                    ),
+                    child: _readable((gutter) => ListView.builder(
+                          controller: _scrollController,
+                          padding: EdgeInsets.fromLTRB(gutter, 14, gutter, 6),
+                          // One extra slot: the reply currently streaming in, drawn
+                          // live under the history (plan item 6, streaming).
+                          itemCount: history.length + 1,
+                          itemBuilder: (context, index) {
+                            if (index == history.length) {
+                              final live = _ai.streamingText.value;
+                              if (!_busy || live.isEmpty) {
+                                return const SizedBox.shrink();
+                              }
+                              return _TranscriptEntry(
+                                  child: _buildMessageBubble(AiMessage(
+                                role: 'assistant',
+                                content: live,
+                                timestamp: DateTime.now(),
+                              )));
+                            }
+                            return _TranscriptEntry(
+                                child: _buildMessageBubble(history[index]));
+                          },
+                        )),
                   ),
                 ),
         ),
-
-        // Loading indicator
-        if (_busy)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            child: Row(
-              children: [
-                const SizedBox(width: 16, height: 16, child: ProgressRing()),
-                const SizedBox(width: 8),
-                // "Generating… · step 12 · 34.5k tokens": a long agent run is
-                // visibly moving, not hanging (plan item 3).
-                Expanded(
-                  child: ValueListenableBuilder<String?>(
-                    valueListenable: _ai.runStatus,
-                    builder: (context, status, _) => Text(
-                      status == null
-                          ? 'ai-generating-text'.i18n()
-                          : "${'ai-generating-text'.i18n()} · $status",
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 11, color: secondaryTextColor(context)),
-                    ),
-                  ),
-                ),
-                // Really stops the run — request, tools and auto-continue —
-                // not just this panel's spinner (plan item 1).
-                Button(
-                  key: const ValueKey('test-chat-cancel-request'),
-                  onPressed: _cancelRun,
-                  child: Text('cancel-text'.i18n()),
-                ),
-              ],
-            ),
-          ),
 
         // Why Send did nothing, said in the panel instead of by navigating
         // away from it (PS-33).
@@ -679,64 +687,99 @@ class _AiChatPanelState extends State<AiChatPanel> {
             ),
           ),
 
-        // Input area
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(
-                color: surfaceBorderColor(context),
-                width: 1,
-              ),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+        // Composer: one card holding the growing input and the send button,
+        // which turns into Stop while a run is in flight. Send, the box and
+        // a separate Cancel used to sit side by side at three different
+        // heights (user-reported).
+        _readable((gutter) => Padding(
+              padding: EdgeInsets.fromLTRB(gutter - 2, 4, gutter - 2, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: TextBox(
-                      key: const ValueKey('test-chat-input'),
+                  if (_busy)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+                      child: Row(
+                        children: [
+                          const SizedBox.square(
+                              dimension: 14,
+                              child: ProgressRing(strokeWidth: 2)),
+                          const SizedBox(width: 8),
+                          // "Generating… · step 12 · 34.5k tokens": a long agent
+                          // run is visibly moving, not hanging (plan item 3).
+                          Expanded(
+                            child: ValueListenableBuilder<String?>(
+                              valueListenable: _ai.runStatus,
+                              builder: (context, status, _) => Text(
+                                status == null
+                                    ? 'ai-generating-text'.i18n()
+                                    : "${'ai-generating-text'.i18n()} · $status",
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: AiChatPanel.metaFontSize,
+                                    color: secondaryTextColor(context)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  _InputCard(
+                    focused: _inputFocus.hasFocus,
+                    input: _CardTextBox(
+                      fieldKey: const ValueKey('test-chat-input'),
                       controller: _inputController,
                       focusNode: _inputFocus,
                       placeholder: 'ai-assistant-placeholder'.i18n(),
                       // A question longer than one line was typed into a
-                      // one-line box; it grows with the text now, capped so
-                      // a pasted log cannot push the transcript out of the
-                      // panel.
-                      minLines: 1,
+                      // one-line box; it grows with the text now, capped so a
+                      // pasted log cannot push the transcript out of the panel.
                       maxLines: 6,
                       onChanged: (_) => setState(() {}),
                     ),
+                    // Really stops the run — request, tools and auto-continue —
+                    // not just this panel's spinner (plan item 1).
+                    action: _busy
+                        ? _ComposerButton(
+                            buttonKey:
+                                const ValueKey('test-chat-cancel-request'),
+                            label: 'ai-stop-text'.i18n(),
+                            icon: FluentIcons.stop,
+                            onPressed: _cancelRun,
+                          )
+                        : _ComposerButton(
+                            buttonKey: const ValueKey('test-chat-send'),
+                            label: 'ai-send-text'.i18n(),
+                            icon: FluentIcons.send,
+                            onPressed: _inputController.text.trim().isNotEmpty
+                                ? _sendMessage
+                                : null,
+                          ),
                   ),
-                  const SizedBox(width: 8),
-                  Button(
-                    key: const ValueKey('test-chat-send'),
-                    onPressed:
-                        (_inputController.text.trim().isNotEmpty && !_busy)
-                            ? _sendMessage
-                            : null,
-                    child: Text('ai-send-text'.i18n()),
+                  const SizedBox(height: 6),
+                  // Enter no longer sends, so the box says what does.
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      'ai-send-hint-text'.i18n([AiChatPanel.sendModifierLabel]),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: secondaryTextColor(context),
+                      ),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
-              // Enter no longer sends, so the box says what does.
-              Text(
-                'ai-send-hint-text'.i18n([AiChatPanel.sendModifierLabel]),
-                style: TextStyle(
-                  fontSize: 10,
-                  color: secondaryTextColor(context),
-                ),
-              ),
-            ],
-          ),
-        ),
+            )),
       ],
     );
   }
+
+  /// Expanded over a wide page, a line of text ran 1,500px; the transcript
+  /// and the composer keep a readable column centred in it instead.
+  Widget _readable(Widget Function(double gutter) builder) => LayoutBuilder(
+      builder: (context, constraints) => builder(math.max(
+          14.0, (constraints.maxWidth - AiChatPanel.readableWidth) / 2)));
 
   static String _shortSandboxName(String distro) =>
       distro.startsWith(SandboxService.prefix)
@@ -757,11 +800,10 @@ class _AiChatPanelState extends State<AiChatPanel> {
     // glyph and the chevron (user-reported).
     return FlyoutTarget(
       controller: _sessionsFlyout,
-      child: NamedIconButton(
+      child: _PanelIconButton(
         key: const ValueKey('test-chat-sessions'),
         label: 'ai-sessions-text'.i18n(),
         icon: FluentIcons.history,
-        iconSize: 14,
         onPressed: () => _sessionsFlyout.showFlyout(
           builder: (context) => _sessionsMenu(),
         ),
@@ -833,158 +875,199 @@ class _AiChatPanelState extends State<AiChatPanel> {
 
   Widget _buildTasksSection(BuildContext context) {
     final items = _todos.items;
-    final header = Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-      child: Row(
-        children: [
-          Icon(
-            _tasksExpanded ? FluentIcons.chevron_down : FluentIcons.chevron_right,
-            size: 10,
-            color: secondaryTextColor(context),
-          ),
-          const SizedBox(width: 6),
-          Text('ai-tasks-title'.i18n(),
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-          const SizedBox(width: 6),
-          if (items.isNotEmpty)
-            Text('${_todos.openCount}/${items.length}',
-                style: TextStyle(
-                    fontSize: 11, color: secondaryTextColor(context))),
-          const Spacer(),
-          if (_todos.hasOpen)
-            MergeSemantics(
-              child: Tooltip(
-                message: 'ai-tasks-work-text'.i18n(),
-                child: IconButton(
-                  key: const ValueKey('test-chat-work-tasks'),
-                  icon: const Icon(FluentIcons.play, size: 12),
-                  onPressed: _isLoading ? null : _workOnTasks,
-                ),
-              ),
+    final theme = FluentTheme.of(context);
+    final header = SizedBox(
+      height: 40,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 14, right: 8),
+        child: Row(
+          children: [
+            Icon(
+              _tasksExpanded
+                  ? FluentIcons.chevron_down
+                  : FluentIcons.chevron_right,
+              size: 10,
+              color: secondaryTextColor(context),
             ),
-        ],
+            const SizedBox(width: 8),
+            Icon(FluentIcons.task_list,
+                size: 14, color: secondaryTextColor(context)),
+            const SizedBox(width: 8),
+            Text('ai-tasks-title'.i18n(),
+                style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: AiChatPanel.metaFontSize)),
+            const SizedBox(width: 8),
+            if (items.isNotEmpty)
+              // Open over total, as a count pill rather than loose text.
+              Container(
+                key: const ValueKey('test-chat-tasks-count'),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                decoration: BoxDecoration(
+                  color: _todos.hasOpen
+                      ? theme.accentColor.withValues(alpha: 0.15)
+                      : subtleFillColor(context),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text('${_todos.openCount}/${items.length}',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: _todos.hasOpen
+                            ? theme.accentColor
+                                .defaultBrushFor(theme.brightness)
+                            : secondaryTextColor(context))),
+              ),
+            const Spacer(),
+            if (_todos.hasOpen)
+              _PanelIconButton(
+                key: const ValueKey('test-chat-work-tasks'),
+                label: 'ai-tasks-work-text'.i18n(),
+                icon: FluentIcons.play,
+                iconSize: 12,
+                onPressed: _isLoading ? null : _workOnTasks,
+              ),
+          ],
+        ),
       ),
     );
 
+    void addTask() {
+      final v = _todoInputController.text.trim();
+      if (v.isEmpty) return;
+      _todos.add(v);
+      _todoInputController.clear();
+      setState(() {});
+    }
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // HoverButton, not GestureDetector: the header is the only way to
         // fold the queue, and a GestureDetector cannot be reached or
         // activated by keyboard (IA-04 — enforced by keyboard_focus_test).
         HoverButton(
+          key: const ValueKey('test-chat-tasks-toggle'),
           onPressed: () => setState(() => _tasksExpanded = !_tasksExpanded),
           builder: (context, states) => FocusBorder(
             focused: states.isFocused,
-            child: header,
+            child: ColoredBox(
+              color: states.isHovered
+                  ? subtleFillColor(context)
+                  : Colors.transparent,
+              child: header,
+            ),
           ),
         ),
-        if (_tasksExpanded) ...[
+        if (_tasksExpanded)
           // Capped: a long queue scrolls inside its own box instead of
           // squeezing the conversation out of the panel.
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 240),
             child: SingleChildScrollView(
-              child: Column(children: [
-          for (final t in items)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 4, 12, 4),
-              child: Row(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Checkbox(
-                    checked: t.done,
-                    onChanged: (v) => _todos.setDone(t.id, v ?? false),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      t.text,
-                      style: TextStyle(
-                        fontSize: 12,
-                        decoration:
-                            t.done ? TextDecoration.lineThrough : null,
-                        color: t.done ? secondaryTextColor(context) : null,
+                  for (final t in items)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: SizedBox(
+                        height: AiChatPanel.controlSize,
+                        child: Row(
+                          children: [
+                            Checkbox(
+                              checked: t.done,
+                              onChanged: (v) =>
+                                  _todos.setDone(t.id, v ?? false),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                t.text,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: AiChatPanel.metaFontSize,
+                                  decoration: t.done
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                  color: t.done
+                                      ? secondaryTextColor(context)
+                                      : null,
+                                ),
+                              ),
+                            ),
+                            _PanelIconButton(
+                              key: ValueKey('test-chat-task-delete-${t.id}'),
+                              label: 'delete-text'.i18n(),
+                              icon: FluentIcons.clear,
+                              iconSize: 10,
+                              onPressed: () => _todos.remove(t.id),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  MergeSemantics(
-                    child: Tooltip(
-                      message: 'delete-text'.i18n(),
-                      child: IconButton(
-                        icon: Icon(FluentIcons.clear,
-                            size: 10, color: secondaryTextColor(context)),
-                        onPressed: () => _todos.remove(t.id),
-                      ),
+                  if (items.isNotEmpty) const SizedBox(height: 6),
+                  _InputCard(
+                    focused: _todoInputFocus.hasFocus,
+                    input: _CardTextBox(
+                      fieldKey: const ValueKey('test-chat-task-input'),
+                      controller: _todoInputController,
+                      focusNode: _todoInputFocus,
+                      placeholder: 'ai-tasks-add-hint-text'.i18n(),
+                      maxLines: 1,
+                      onChanged: (_) => setState(() {}),
+                      onSubmitted: (_) => addTask(),
+                    ),
+                    action: _PanelIconButton(
+                      key: const ValueKey('test-chat-task-add'),
+                      label: 'ai-tasks-add-hint-text'.i18n(),
+                      icon: FluentIcons.add,
+                      onPressed: _todoInputController.text.trim().isEmpty
+                          ? null
+                          : addTask,
                     ),
                   ),
                 ],
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 2, 12, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextBox(
-                    controller: _todoInputController,
-                    placeholder: 'ai-tasks-add-hint-text'.i18n(),
-                    onSubmitted: (v) {
-                      if (v.trim().isNotEmpty) {
-                        _todos.add(v);
-                        _todoInputController.clear();
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(width: 6),
-                MergeSemantics(
-                  child: Tooltip(
-                    message: 'ai-tasks-add-hint-text'.i18n(),
-                    child: IconButton(
-                  icon: const Icon(FluentIcons.add, size: 12),
-                  onPressed: () {
-                    final v = _todoInputController.text.trim();
-                    if (v.isNotEmpty) {
-                      _todos.add(v);
-                      _todoInputController.clear();
-                    }
-                  },
-                ),
-                  ),
-                ),
-              ],
-            ),
           ),
-              ]),
-            ),
-          ),
-        ],
         Container(height: 1, color: surfaceBorderColor(context)),
       ],
     );
   }
 
   TextStyle get _noteStyle => TextStyle(
-        fontSize: 11,
-        fontStyle: FontStyle.italic,
+        fontSize: 11.5,
         color: secondaryTextColor(context),
       );
 
-  /// A compact note under the assistant's avatar column — not a chat bubble
-  /// — for what happened on the machine mid-run.
+  /// What happened on the machine mid-run, as a compact chip under the
+  /// assistant's column — not a chat bubble.
   Widget _noteChip(IconData icon, Widget body, {Key? key}) => Padding(
         key: key,
-        padding: const EdgeInsets.only(bottom: 8, left: 36),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Icon(icon, size: 11, color: secondaryTextColor(context)),
+        padding: const EdgeInsets.only(
+            bottom: 6, left: _AssistantAvatar.defaultSize + 8),
+        child: Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: subtleFillColor(context),
+              border: Border.all(color: surfaceBorderColor(context)),
+              borderRadius:
+                  BorderRadius.circular(AiChatPanel.controlRadius - 2),
             ),
-            const SizedBox(width: 6),
-            Flexible(child: body),
-          ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 11, color: secondaryTextColor(context)),
+                const SizedBox(width: 6),
+                Flexible(child: body),
+              ],
+            ),
+          ),
         ),
       );
 
@@ -1028,90 +1111,80 @@ class _AiChatPanelState extends State<AiChatPanel> {
     // user can see what the assistant actually did on their machine.
     if (msg.role == 'tool') {
       return _noteChip(
-        FluentIcons.processing,
-        Text('ai-ran-tool-text'.i18n([msg.content]), style: _noteStyle),
+        FluentIcons.developer_tools,
+        Text('ai-ran-tool-text'.i18n([msg.content]),
+            overflow: TextOverflow.ellipsis, style: _noteStyle),
       );
     }
+    final theme = FluentTheme.of(context);
     final isUser = msg.role == 'user';
+    const round = Radius.circular(AiChatPanel.bubbleRadius);
+    const tight = Radius.circular(AiChatPanel.controlRadius / 2);
+    const body = TextStyle(fontSize: AiChatPanel.bodyFontSize, height: 1.45);
+    final bubble = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: isUser
+            ? theme.accentColor.withValues(
+                alpha: theme.brightness == Brightness.dark ? 0.32 : 0.14)
+            : cardFillColor(context),
+        border: isUser ? null : Border.all(color: surfaceBorderColor(context)),
+        // The corner at the speaker's side is tightened, so the bubble
+        // points at who said it — that replaces the user's avatar.
+        borderRadius: BorderRadius.only(
+          topLeft: isUser ? round : tight,
+          topRight: isUser ? tight : round,
+          bottomLeft: round,
+          bottomRight: round,
+        ),
+      ),
+      child: msg.role == 'assistant'
+          ? MarkdownBody(
+              data: msg.content,
+              // Fenced code blocks get a copy button — the assistant
+              // hands out commands, and retyping them defeats the
+              // point (plan item 6).
+              builders: {'pre': _CodeBlockBuilder(context)},
+              styleSheet: MarkdownStyleSheet(
+                p: body,
+                listBullet: body,
+                h1: body.copyWith(fontSize: 16, fontWeight: FontWeight.w600),
+                h2: body.copyWith(fontSize: 15, fontWeight: FontWeight.w600),
+                h3: body.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
+                blockSpacing: 8,
+                code: TextStyle(
+                  fontSize: AiChatPanel.metaFontSize,
+                  fontFamily: _CodeBlockBuilder.monoFamily,
+                  fontFamilyFallback: _CodeBlockBuilder.monoFallback,
+                  backgroundColor: subtleFillColor(context),
+                ),
+                // [_CodeBlockBuilder] draws the block's box; a second one
+                // from the style sheet framed it twice.
+                codeblockDecoration: const BoxDecoration(),
+                codeblockPadding: EdgeInsets.zero,
+              ),
+            )
+          : Text(msg.content, style: body),
+    );
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment:
             isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
-          if (!isUser) ...[
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color:
-                    FluentTheme.of(context).accentColor.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                FluentIcons.chat,
-                size: 14,
-                color: FluentTheme.of(context).accentColor,
-              ),
+          if (isUser)
+            // Room on the left, so a short question stays a bubble on the
+            // right and a long one does not run edge to edge.
+            const SizedBox(width: 40)
+          else ...[
+            _AssistantAvatar(
+              icon:
+                  _sandbox == null ? FluentIcons.chat : FluentIcons.cube_shape,
             ),
             const SizedBox(width: 8),
           ],
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: isUser
-                    ? FluentTheme.of(context)
-                        .accentColor
-                        .withValues(alpha: 0.15)
-                    : subtleFillColor(context),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: msg.role == 'assistant'
-                  ? MarkdownBody(
-                      data: msg.content,
-                      // Fenced code blocks get a copy button — the assistant
-                      // hands out commands, and retyping them defeats the
-                      // point (plan item 6).
-                      builders: {'pre': _CodeBlockBuilder(context)},
-                      styleSheet: MarkdownStyleSheet(
-                        p: const TextStyle(fontSize: 12),
-                        code: TextStyle(
-                          fontSize: 11,
-                          backgroundColor: subtleFillColor(context),
-                        ),
-                        codeblockDecoration: BoxDecoration(
-                          color: subtleFillColor(context),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    )
-                  : Text(
-                      msg.content,
-                      style: const TextStyle(fontSize: 12),
-                    ),
-            ),
-          ),
-          if (isUser) ...[
-            const SizedBox(width: 8),
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: subtleFillColor(context),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              alignment: Alignment.center,
-              // A person glyph — the user avatar rendered as a plus sign
-              // (audit PS-37).
-              child: Icon(
-                FluentIcons.contact,
-                size: 14,
-                color: secondaryTextColor(context),
-              ),
-            ),
-          ],
+          Flexible(child: bubble),
         ],
       ),
     );
@@ -1124,7 +1197,10 @@ class _AiChatPanelState extends State<AiChatPanel> {
     _sessions.removeListener(_onSessionsChanged);
     _sessionsFlyout.dispose();
     _selectionDelegate.dispose();
+    _inputFocus.removeListener(_onFocusChanged);
+    _todoInputFocus.removeListener(_onFocusChanged);
     _inputFocus.dispose();
+    _todoInputFocus.dispose();
     _inputController.dispose();
     _todoInputController.dispose();
     _scrollController.dispose();
@@ -1246,6 +1322,11 @@ class _CodeBlockBuilder extends MarkdownElementBuilder {
 
   final BuildContext context;
 
+  /// Consolas exists only on Windows; the fallbacks keep code monospaced on
+  /// a Mac instead of dropping to the proportional UI font.
+  static const String monoFamily = 'Consolas';
+  static const List<String> monoFallback = ['Menlo', 'Monaco', 'monospace'];
+
   /// flutter_markdown opens an inline run for the text inside the block and
   /// only closes it once that run holds a child. The default `visitText`
   /// returns none, so the run leaked past the block and the paragraph after
@@ -1265,35 +1346,244 @@ class _CodeBlockBuilder extends MarkdownElementBuilder {
         Container(
           width: double.infinity,
           margin: const EdgeInsets.symmetric(vertical: 4),
-          padding: const EdgeInsets.fromLTRB(8, 8, 32, 8),
+          padding: const EdgeInsets.fromLTRB(10, 9, 36, 9),
           decoration: BoxDecoration(
             color: subtleFillColor(context),
-            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: surfaceBorderColor(context)),
+            borderRadius: BorderRadius.circular(AiChatPanel.controlRadius - 2),
           ),
           child: Text(
             code,
-            style: const TextStyle(fontSize: 11, fontFamily: 'Consolas'),
+            style: const TextStyle(
+              fontSize: AiChatPanel.metaFontSize,
+              height: 1.4,
+              fontFamily: monoFamily,
+              fontFamilyFallback: monoFallback,
+            ),
           ),
         ),
         Positioned(
           top: 6,
           right: 2,
-          child: MergeSemantics(
-            child: Tooltip(
-              message: 'copy-text'.i18n(),
-              child: IconButton(
-                icon: const Icon(FluentIcons.copy, size: 12),
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: code));
-                  Notify.message('copied-text'.i18n(),
-                      severity: InfoBarSeverity.success,
-                      duration: const Duration(seconds: 2));
-                },
-              ),
-            ),
+          child: _PanelIconButton(
+            label: 'copy-text'.i18n(),
+            icon: FluentIcons.copy,
+            iconSize: 12,
+            size: 28,
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: code));
+              Notify.message('copied-text'.i18n(),
+                  severity: InfoBarSeverity.success,
+                  duration: const Duration(seconds: 2));
+            },
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The panel's icon-only button: a [AiChatPanel.controlSize] square with the
+/// shared corner radius, named through its tooltip.
+///
+/// [NamedIconButton] with the geometry pinned. fluent's own icon button sizes
+/// itself from its glyph and fills a gray square when disabled, which is what
+/// made the header's five buttons five different shapes.
+class _PanelIconButton extends StatelessWidget {
+  const _PanelIconButton({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.iconSize = 14,
+    this.size = AiChatPanel.controlSize,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final double iconSize;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FluentTheme.of(context);
+    return MergeSemantics(
+      child: Tooltip(
+        message: label,
+        child: SizedBox.square(
+          dimension: size,
+          child: IconButton(
+            icon: Icon(icon, size: iconSize),
+            onPressed: onPressed,
+            style: ButtonStyle(
+              padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+              shape: WidgetStatePropertyAll(RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(AiChatPanel.controlRadius))),
+              backgroundColor: WidgetStateProperty.resolveWith((states) =>
+                  states.isDisabled
+                      ? Colors.transparent
+                      : ButtonThemeData.uncheckedInputColor(theme, states,
+                          transparentWhenNone: true)),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Send, or Stop while a run is in flight: an accent square inside the
+/// composer card, the same size as every other control in the panel.
+class _ComposerButton extends StatelessWidget {
+  const _ComposerButton({
+    required this.buttonKey,
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  /// On the [FilledButton] itself, so a finder for it reaches the button
+  /// and its onPressed.
+  final Key buttonKey;
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final button = FilledButton(
+      key: buttonKey,
+      onPressed: onPressed,
+      style: ButtonStyle(
+        padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+        shape: WidgetStatePropertyAll(RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AiChatPanel.controlRadius))),
+      ),
+      child: Icon(icon, size: 14),
+    );
+    return MergeSemantics(
+      child: Tooltip(
+        message: label,
+        child:
+            SizedBox.square(dimension: AiChatPanel.controlSize, child: button),
+      ),
+    );
+  }
+}
+
+/// A rounded card around a borderless input and one trailing control —
+/// the composer and the "add a task" row. The card draws the focus ring, so
+/// the input loses fluent's underline.
+class _InputCard extends StatelessWidget {
+  const _InputCard({
+    required this.focused,
+    required this.input,
+    required this.action,
+  });
+
+  final bool focused;
+  final Widget input;
+  final Widget action;
+
+  /// Space between the card's edge and the control inside it; the card's
+  /// radius is the control's plus this, so the corners stay concentric.
+  static const double inset = 4;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = FluentTheme.of(context);
+    return AnimatedContainer(
+      duration: theme.fasterAnimationDuration,
+      padding: const EdgeInsets.all(inset - 1),
+      decoration: BoxDecoration(
+        color: theme.resources.controlFillColorDefault,
+        border: Border.all(
+          color: focused
+              ? theme.accentColor.defaultBrushFor(theme.brightness)
+              : theme.resources.controlStrongStrokeColorDefault
+                  .withValues(alpha: 0.35),
+        ),
+        borderRadius: BorderRadius.circular(AiChatPanel.controlRadius + inset),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(child: input),
+          const SizedBox(width: inset),
+          action,
+        ],
+      ),
+    );
+  }
+}
+
+/// A [TextBox] stripped of its own fill and underline, for an [_InputCard].
+class _CardTextBox extends StatelessWidget {
+  const _CardTextBox({
+    required this.fieldKey,
+    required this.controller,
+    required this.focusNode,
+    required this.placeholder,
+    required this.maxLines,
+    this.onChanged,
+    this.onSubmitted,
+  });
+
+  /// On the [TextBox] itself, so a finder for it reaches the box.
+  final Key fieldKey;
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final String placeholder;
+  final int maxLines;
+  final ValueChanged<String>? onChanged;
+  final ValueChanged<String>? onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextBox(
+      key: fieldKey,
+      controller: controller,
+      focusNode: focusNode,
+      placeholder: placeholder,
+      minLines: 1,
+      maxLines: maxLines,
+      onChanged: onChanged,
+      onSubmitted: onSubmitted,
+      style: const TextStyle(fontSize: AiChatPanel.bodyFontSize, height: 1.4),
+      padding: const EdgeInsets.fromLTRB(8, 7, 4, 7),
+      decoration: const WidgetStatePropertyAll(BoxDecoration(
+        color: Colors.transparent,
+        border: Border(),
+      )),
+      foregroundDecoration:
+          const WidgetStatePropertyAll(BoxDecoration(border: Border())),
+    );
+  }
+}
+
+/// The assistant's mark beside its replies and in the empty state.
+class _AssistantAvatar extends StatelessWidget {
+  const _AssistantAvatar({required this.icon, this.size = defaultSize});
+
+  static const double defaultSize = 24;
+
+  final IconData icon;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = FluentTheme.of(context).accentColor;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(size / 3),
+      ),
+      alignment: Alignment.center,
+      child: Icon(icon, size: size / 2, color: accent),
     );
   }
 }

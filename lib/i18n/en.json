@@ -319,6 +319,7 @@
   "ai-assistant-placeholder": "Ask about WSL...",
   "ai-chat-button-text": "Control with AI",
   "ai-send-text": "Send",
+  "ai-stop-text": "Stop generating",
   "ai-new-chat-text": "New chat",
   "ai-chat-history-text": "Previous chats",
   "ai-chat-untitled-text": "Untitled chat",

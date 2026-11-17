@@ -126,7 +126,9 @@ void main() {
     return run;
   }
 
-  Finder sendButton() => find.widgetWithText(Button, 'ai-send-text');
+  /// Send and Stop share one slot in the composer: Send while idle, Stop
+  /// while a run is in flight.
+  Finder sendButton() => find.byKey(const ValueKey('test-chat-send'));
   Finder cancelButton() =>
       find.byKey(const ValueKey('test-chat-cancel-request'));
 
@@ -157,8 +159,10 @@ void main() {
     await tester.pump();
 
     expect(ai.isRunning, true);
-    expect(tester.widget<Button>(sendButton()).onPressed, isNull);
+    expect(sendButton(), findsNothing,
+        reason: 'Send turns into Stop instead of offering a second run');
     expect(cancelButton(), findsOneWidget);
+    expect(tester.widget<Button>(cancelButton()).onPressed, isNotNull);
 
     await tester.runAsync(() async {
       provider.reply('done');

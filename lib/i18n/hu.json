@@ -319,6 +319,7 @@
   "ai-assistant-placeholder": "Kérdezz a WSL-ről...",
   "ai-chat-button-text": "Vezérlés MI-vel",
   "ai-send-text": "Küldés",
+  "ai-stop-text": "Generálás leállítása",
   "ai-new-chat-text": "Új csevegés",
   "ai-chat-history-text": "Korábbi csevegések",
   "ai-chat-untitled-text": "Névtelen csevegés",

@@ -156,7 +156,7 @@ void main() {
       expect(find.byIcon(FluentIcons.copy), findsOneWidget);
       final after =
           tester.widget<Text>(find.textContaining('Open it in a browser.'));
-      expect(after.textSpan!.style?.fontSize, 12,
+      expect(after.textSpan!.style?.fontSize, AiChatPanel.bodyFontSize,
           reason: 'the paragraph after the block keeps the paragraph style');
     });
 

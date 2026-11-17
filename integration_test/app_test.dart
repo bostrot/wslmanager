@@ -2,6 +2,8 @@ import 'package:fluent_ui/fluent_ui.dart' hide Page;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wsl2distromanager/api/ai_service.dart';
+import 'package:wsl2distromanager/components/ai_chat_panel.dart';
 import 'package:wsl2distromanager/main.dart';
 import 'package:wsl2distromanager/components/constants.dart';
 import 'package:wsl2distromanager/components/helpers.dart';
@@ -143,10 +145,13 @@ void main() {
   group('AI Chat Panel', () {
     setUp(() async {
       // Mark the changelog as seen: its modal barrier would otherwise
-      // swallow the tap on the toggle below.
+      // swallow the tap on the toggle below. AI features are opt-in since
+      // bostrot/ai-tasks#98; answered yes here, so neither the first-start
+      // question nor a hidden toggle gets in the way.
       SharedPreferences.setMockInitialValues({
         'version': currentVersion,
         'LastChangelogVersion': currentVersion,
+        AiService.enabledPrefKey: true,
       });
       prefs = await SharedPreferences.getInstance();
       resetTestState();
@@ -170,6 +175,14 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('test-ai-chat-toggle')));
       await tester.pumpAndSettle();
       expect(GlobalVariable.aiPanelVisible, isTrue);
+      // The composer card: the box and Send share one control height.
+      final input = find.byKey(const ValueKey('test-chat-input'));
+      final send = find.byKey(const ValueKey('test-chat-send'));
+      expect(input, findsOneWidget);
+      expect(send, findsOneWidget);
+      expect(tester.getSize(send).height, AiChatPanel.controlSize);
+      expect(tester.getRect(send).bottom,
+          closeTo(tester.getRect(input).bottom, 0.5));
       await tester.tap(find.byKey(const ValueKey('test-ai-chat-toggle')));
       await tester.pumpAndSettle();
       expect(GlobalVariable.aiPanelVisible, isFalse);

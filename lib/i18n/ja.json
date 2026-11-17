@@ -319,6 +319,7 @@
   "ai-assistant-placeholder": "WSLについて質問...",
   "ai-chat-button-text": "AIで操作",
   "ai-send-text": "送信",
+  "ai-stop-text": "生成を停止",
   "ai-new-chat-text": "新しいチャット",
   "ai-chat-history-text": "以前のチャット",
   "ai-chat-untitled-text": "無題のチャット",
