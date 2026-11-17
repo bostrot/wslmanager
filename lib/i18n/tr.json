@@ -1359,5 +1359,7 @@
   "vmresizeguestgrows-text": "Daha büyük bir disk konuğa daha büyük bir blok aygıtı olarak ulaşır; bu Linux konuğu açılırken kök dosya sistemini kendisi büyütür.",
   "vmresizeguestmanual-text": "Daha büyük bir disk konuğa daha büyük bir blok aygıtı olarak ulaşır, ancak konuk mevcut dosya sistemini korur. Konuğun içinden büyütün — macOS'ta Disk İzlencesi, Linux'ta growpart ve resize2fs.",
   "vmresizing-text": "%s yeniden boyutlandırılıyor…",
-  "vmresized-text": "%s0 artık %s1 çekirdek, %s2 GB bellek ve %s3 GB disk kullanıyor. Bir sonraki başlatmada geçerli olur."
+  "vmresized-text": "%s0 artık %s1 çekirdek, %s2 GB bellek ve %s3 GB disk kullanıyor. Bir sonraki başlatmada geçerli olur.",
+  "vmconsolelogtooltip-text": "Konsol günlüğünü görüntüle",
+  "vmnoconsolelog-text": "Bu VM henüz konsoluna hiçbir şey yazmadı."
 }

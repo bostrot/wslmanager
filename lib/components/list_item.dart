@@ -454,6 +454,19 @@ class Bar extends StatelessWidget {
   final bool isCleaning;
   final Function(bool) onCleaningChanged;
 
+  /// Open the VM's serial console log — the only record of a boot that
+  /// went wrong while nobody had the console open.
+  Future<void> _openConsoleLog(AppleVmApi api) async {
+    try {
+      if (!await api.openConsoleLog(widget.item)) {
+        Notify.message('vmnoconsolelog-text'.i18n(),
+            severity: InfoBarSeverity.info);
+      }
+    } catch (error) {
+      Notify.message('$error', severity: InfoBarSeverity.error);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final VmBackend api = vmBackend();
@@ -592,6 +605,20 @@ class Bar extends StatelessWidget {
                               widget.item),
                         );
                       }),
+                    ),
+                  ),
+                ),
+              if (features.serialConsole && api is AppleVmApi)
+                MergeSemantics(
+                  child: Tooltip(
+                    message: 'vmconsolelogtooltip-text'.i18n(),
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: IconButton(
+                        key: ValueKey('test-listitem-consolelog-${widget.item}'),
+                        icon: const Icon(FluentIcons.text_document, size: 16.0),
+                        onPressed: () => _openConsoleLog(api),
+                      ),
                     ),
                   ),
                 ),

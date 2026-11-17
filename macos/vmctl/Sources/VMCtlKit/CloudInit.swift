@@ -62,9 +62,55 @@ public enum CloudInit {
         bootcmd:
           - |
         \(indented(consoleGettyFixScript, by: 4))
+          - |
+        \(indented(consoleKernelArgScript, by: 4))
 
         """
     }
+
+    /// Puts the kernel's console — and with it fsck, systemd's boot status
+    /// and the emergency shell — on the virtio console from the next boot on.
+    ///
+    /// The daemon logs everything the guest writes to hvc0 (`serial.log`),
+    /// but cloud images name the consoles of the machines they were built
+    /// for: Debian's says `console=tty0 console=ttyS0`, others `ttyAMA0`,
+    /// none of which exist here. So a guest whose root filesystem failed its
+    /// check dropped into emergency mode on a console nobody had, and the log
+    /// held nothing but GRUB's screen setup. Appended last, `console=hvc0`
+    /// also becomes /dev/console, which is where the emergency shell opens.
+    ///
+    /// GRUB guests (Debian, Ubuntu) get a `grub.d` snippet and an
+    /// `update-grub`; BLS guests (Fedora and friends) get `grubby`. Anything
+    /// else — Alpine's extlinux, a hand-installed guest — is left alone.
+    /// Runs on every boot and does nothing once the running kernel already
+    /// has the argument or the snippet is in place; the first boot of a new
+    /// VM is the one boot it cannot cover.
+    ///
+    /// The overrides let the tests run it against a fixture.
+    public static let consoleKernelArgScript = """
+    vmctl_console_on_hvc0() {
+      devdir=${WSLMANAGER_DEV:-/dev}
+      cmdline=${WSLMANAGER_CMDLINE:-/proc/cmdline}
+      grubd=${WSLMANAGER_GRUB_D:-/etc/default/grub.d}
+      [ -e "$devdir/hvc0" ] || return 0
+      grep -q 'console=hvc0' "$cmdline" 2>/dev/null && return 0
+      if command -v grubby >/dev/null 2>&1; then
+        grubby --update-kernel=ALL --args=console=hvc0 >/dev/null 2>&1
+        return 0
+      fi
+      command -v update-grub >/dev/null 2>&1 || return 0
+      conf="$grubd/99-wslmanager-console.cfg"
+      [ -f "$conf" ] && return 0
+      mkdir -p "$grubd" || return 0
+      printf '%s\n' \
+        '# WSL Manager: boot messages and the emergency shell on hvc0' \
+        'GRUB_CMDLINE_LINUX_DEFAULT="${GRUB_CMDLINE_LINUX_DEFAULT} console=hvc0"' \
+        > "$conf" || return 0
+      update-grub >/dev/null 2>&1 || rm -f "$conf"
+      return 0
+    }
+    vmctl_console_on_hvc0
+    """
 
     /// Busybox init restarts a getty for every `respawn` line in
     /// /etc/inittab whether or not the tty behind it exists. Alpine's cloud

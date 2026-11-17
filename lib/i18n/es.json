@@ -1359,5 +1359,7 @@
   "vmresizeguestgrows-text": "Un disco mayor llega al huésped como un dispositivo de bloques mayor; este huésped Linux amplía su propio sistema de archivos raíz al arrancar.",
   "vmresizeguestmanual-text": "Un disco mayor llega al huésped como un dispositivo de bloques mayor, pero el huésped conserva su sistema de archivos. Amplíalo desde dentro del huésped: Utilidad de Discos en macOS, growpart y resize2fs en Linux.",
   "vmresizing-text": "Redimensionando %s…",
-  "vmresized-text": "%s0 tiene ahora %s1 núcleos, %s2 GB de memoria y un disco de %s3 GB. Se aplica en el siguiente arranque."
+  "vmresized-text": "%s0 tiene ahora %s1 núcleos, %s2 GB de memoria y un disco de %s3 GB. Se aplica en el siguiente arranque.",
+  "vmconsolelogtooltip-text": "Ver registro de la consola",
+  "vmnoconsolelog-text": "Esta VM todavía no ha escrito nada en su consola."
 }

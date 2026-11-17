@@ -206,6 +206,11 @@ public struct VMStore {
 
     /// Create (or grow) a raw disk image. Uses truncate-style allocation so
     /// the file is sparse until the guest writes.
+    ///
+    /// Only ever on an image no guest has open: `create` runs before the VM
+    /// first boots and `resize` refuses while `diskInUse`. Growing under a
+    /// running guest would hand it a device whose size changed beneath its
+    /// partition table.
     public func createDiskImage(at url: URL, sizeBytes: UInt64) throws {
         if !fm.fileExists(atPath: url.path) {
             guard fm.createFile(atPath: url.path, contents: nil) else {
@@ -217,6 +222,9 @@ public struct VMStore {
         let current = try handle.seekToEnd()
         if current < sizeBytes {
             try handle.truncate(atOffset: sizeBytes)
+            // The new length on stable storage before a guest is told about
+            // it, so a host crash cannot leave a config bigger than its disk.
+            try handle.synchronize()
         }
     }
 

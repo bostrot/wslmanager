@@ -1360,5 +1360,7 @@
   "vmresizeguestgrows-text": "Eine größere Festplatte erreicht den Gast als größeres Blockgerät; dieser Linux-Gast vergrößert sein Root-Dateisystem beim Booten selbst.",
   "vmresizeguestmanual-text": "Eine größere Festplatte erreicht den Gast als größeres Blockgerät, der Gast behält aber sein bisheriges Dateisystem. Vergrößere es im Gast — Festplattendienstprogramm unter macOS, growpart und resize2fs unter Linux.",
   "vmresizing-text": "Größe von %s wird geändert…",
-  "vmresized-text": "%s0 hat jetzt %s1 Kerne, %s2 GB Arbeitsspeicher und eine %s3 GB große Festplatte. Wirksam ab dem nächsten Start."
+  "vmresized-text": "%s0 hat jetzt %s1 Kerne, %s2 GB Arbeitsspeicher und eine %s3 GB große Festplatte. Wirksam ab dem nächsten Start.",
+  "vmconsolelogtooltip-text": "Konsolenprotokoll anzeigen",
+  "vmnoconsolelog-text": "Diese VM hat noch nichts auf ihre Konsole geschrieben."
 }

@@ -233,7 +233,9 @@ public enum VmctlCLI {
              [--disk-size GB] [--cpus N] [--memory GB]
       start --name N [--gui]                Start a VM (detached daemon)
       reseed --name N                       Rewrite the cloud-init seed
-      stop --name N [--force]               Stop a VM
+      stop --name N [--force] [--timeout S] Stop a VM: ACPI shutdown, power
+                                            off after 120s; waits until the
+                                            disk is released
       status --name N                       One VM's state as JSON
       ip --name N                           Guest IP as JSON
       delete --name N                       Delete a stopped VM
@@ -275,7 +277,7 @@ public enum VmctlCLI {
     // MARK: commands
 
     static func list(_ store: VMStore) throws {
-        let entries = try store.listEntries { DHCPLeases.ipFor(mac: $0.macAddress, hostname: $0.name) }
+        let entries = try store.listEntries { liveIp($0) }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(["vms": entries])
@@ -441,6 +443,17 @@ public enum VmctlCLI {
             printJson(["started": name, "alreadyRunning": true])
             return
         }
+        // A restart lands here while the previous run may still be letting
+        // go of the image — its daemon gone, its XPC service not yet. Wait
+        // that out instead of opening the disk a second time; the daemon
+        // checks again under its lock, which is what settles a race.
+        guard store.waitForDiskRelease(name, timeout: diskReleaseTimeout) else {
+            let holders = DiskHolders.pids(store.diskPath(name).path)
+            throw VmctlError(
+                "The disk of \(name) is still in use"
+                + (holders.isEmpty ? "" : " by process \(holders.map(String.init).joined(separator: ", "))")
+                + " after \(Int(diskReleaseTimeout))s; not starting a second instance on it. If it is attached in Finder, eject it first.")
+        }
 
         // Spawn a detached copy of this binary to own the VM's lifetime.
         // Bundle.main resolves the absolute executable path even when vmctl
@@ -495,6 +508,20 @@ public enum VmctlCLI {
         try runner.run()
     }
 
+    /// How long a start waits for a previous run to release the disk, and a
+    /// stop waits for the release after the daemon is gone.
+    static let diskReleaseTimeout: TimeInterval = 30
+
+    /// `stop --name N [--force] [--timeout S]`
+    ///
+    /// SIGTERM makes the daemon press the guest's power button and wait up
+    /// to `VMRunner.gracefulStopTimeout` before powering it off itself; this
+    /// waits a little longer than that, so the daemon's own fallback — not a
+    /// SIGKILL from here — is what normally ends a guest that will not shut
+    /// down. `--force` is the last resort for a daemon that is itself stuck.
+    ///
+    /// "Stopped" means the disk is free again, not only that the daemon is
+    /// gone: a restart starts straight after this returns.
     static func stop(_ store: VMStore, _ rest: [String]) throws {
         let bag = ArgumentBag(rest, flagNames: ["force"])
         let name = try bag.require("name")
@@ -503,30 +530,56 @@ public enum VmctlCLI {
             printJson(["stopped": name, "alreadyStopped": true])
             return
         }
+        let logOffset = store.fileSize(store.daemonLogPath(name))
         kill(pid, SIGTERM)
-        let deadline = Date().addingTimeInterval(45)
+        let timeout = TimeInterval(
+            bag.int("timeout", default: Int(VMRunner.gracefulStopTimeout) + 30))
+        let deadline = Date().addingTimeInterval(timeout)
+        var stopped = false
         while Date() < deadline {
             if store.runningPid(name) == nil {
-                printJson(["stopped": name])
-                return
+                stopped = true
+                break
             }
             Thread.sleep(forTimeInterval: 0.5)
         }
-        if bag.flags.contains("force") {
+        var forced = false
+        if !stopped {
+            guard bag.flags.contains("force") else {
+                throw VmctlError("VM \(name) did not stop in time; retry with --force.")
+            }
             kill(pid, SIGKILL)
+            // Reaped by launchd, not us; wait for it to be gone for real.
+            let killDeadline = Date().addingTimeInterval(10)
+            while kill(pid, 0) == 0, Date() < killDeadline {
+                Thread.sleep(forTimeInterval: 0.2)
+            }
             store.clearPid(name)
-            printJson(["stopped": name, "forced": true])
-            return
+            forced = true
         }
-        throw VmctlError("VM \(name) did not stop in time; retry with --force.")
+        forced = forced || daemonReportedForcedStop(store, name, since: logOffset)
+        let released = store.waitForDiskRelease(name, timeout: diskReleaseTimeout)
+        printJson(["stopped": name, "forced": forced, "diskReleased": released])
+    }
+
+    /// Whether the daemon wrote `VMRunner.forcedStopMarker` after [offset]
+    /// in its log, i.e. during this stop.
+    static func daemonReportedForcedStop(_ store: VMStore, _ name: String, since offset: UInt64) -> Bool {
+        guard let handle = FileHandle(forReadingAtPath: store.daemonLogPath(name).path) else {
+            return false
+        }
+        defer { try? handle.close() }
+        try? handle.seek(toOffset: offset)
+        let tail = (try? handle.readToEnd()).map { String(decoding: $0, as: UTF8.self) } ?? ""
+        return tail.contains(VMRunner.forcedStopMarker)
     }
 
     static func delete(_ store: VMStore, _ rest: [String]) throws {
         let bag = ArgumentBag(rest, flagNames: [])
         let name = try bag.require("name")
         _ = try store.loadConfig(name)
-        guard !store.isRunning(name) else {
-            throw VmctlError("VM \(name) is running; stop it before deleting.")
+        guard !store.diskInUse(name) else {
+            throw VmctlError("VM \(name) is running or its disk is still in use; stop it before deleting.")
         }
         try FileManager.default.removeItem(at: store.vmDir(name))
         printJson(["deleted": name])
@@ -538,7 +591,7 @@ public enum VmctlCLI {
         let config = try store.loadConfig(name)
         let running = store.isRunning(name)
         var out: [String: Any] = ["name": name, "state": running ? "running" : "stopped"]
-        if running, let ip = DHCPLeases.ipFor(mac: config.macAddress, hostname: config.name) {
+        if running, let ip = liveIp(config) {
             out["ip"] = ip
         }
         printJson(out)
@@ -617,8 +670,7 @@ public enum VmctlCLI {
             "appliedOnNextBoot": pending,
         ]
         if let password = config.password { out["password"] = password }
-        if store.isRunning(name),
-           let ip = DHCPLeases.ipFor(mac: config.macAddress, hostname: config.name) {
+        if store.isRunning(name), let ip = liveIp(config) {
             out["ip"] = ip
         }
         printJson(out)
@@ -628,7 +680,32 @@ public enum VmctlCLI {
         let bag = ArgumentBag(rest, flagNames: [])
         let name = try bag.require("name")
         let config = try store.loadConfig(name)
-        printJson(["ip": DHCPLeases.ipFor(mac: config.macAddress, hostname: config.name) as Any])
+        // A stopped VM has no address, whatever bootpd still has on file.
+        let ip = store.isRunning(name) ? liveIp(config) : nil
+        printJson(["ip": ip as Any])
+    }
+
+    /// Probe behind [liveIp]; replaceable so tests never dial a real host.
+    nonisolated(unsafe) static var reachability: (String) -> Bool = {
+        GuestReachability.answers($0)
+    }
+
+    /// The guest's address, or nil when it has none *that answers*.
+    ///
+    /// The lease alone was the answer before, and a lease stays current for
+    /// its whole term after the guest has gone quiet: a Linux VM whose
+    /// filesystem broke under it kept being reported at 192.168.64.9 by
+    /// `ip` and `vm_restart` while nothing there responded. A Linux guest is
+    /// probed on its SSH port, where an accept or a refusal both prove a
+    /// live network stack. A macOS guest is not: its firewall in stealth
+    /// mode drops the probe silently, and it would lose an address it holds.
+    static func liveIp(_ config: VMConfig, leases: String? = nil) -> String? {
+        let candidate = leases.map {
+            DHCPLeases.ipFor(mac: config.macAddress, hostname: config.name, in: $0)
+        } ?? DHCPLeases.ipFor(mac: config.macAddress, hostname: config.name)
+        guard let ip = candidate else { return nil }
+        guard config.os == .linux else { return ip }
+        return reachability(ip) ? ip : nil
     }
 
     static func exportVm(_ store: VMStore, _ rest: [String]) throws {
@@ -636,8 +713,9 @@ public enum VmctlCLI {
         let name = try bag.require("name")
         let output = try bag.require("output")
         _ = try store.loadConfig(name)
-        guard !store.isRunning(name) else {
-            throw VmctlError("VM \(name) is running; stop it before exporting.")
+        // A copy of an image a guest is writing is a torn filesystem.
+        guard !store.diskInUse(name) else {
+            throw VmctlError("VM \(name) is running or its disk is still in use; stop it before exporting.")
         }
         let fm = FileManager.default
         try? fm.removeItem(atPath: output)
@@ -871,7 +949,7 @@ public enum VmctlCLI {
     static func waitForIp(_ config: VMConfig, timeout: TimeInterval = 20) -> String? {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if let ip = DHCPLeases.ipFor(mac: config.macAddress, hostname: config.name) {
+            if let ip = liveIp(config) {
                 return ip
             }
             Thread.sleep(forTimeInterval: 1)

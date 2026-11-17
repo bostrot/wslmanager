@@ -1359,5 +1359,7 @@
   "vmresizeguestgrows-text": "디스크를 늘리면 게스트에는 더 큰 블록 장치로 보입니다. 이 Linux 게스트는 부팅하면서 루트 파일 시스템을 스스로 늘립니다.",
   "vmresizeguestmanual-text": "디스크를 늘리면 게스트에는 더 큰 블록 장치로 보이지만 파일 시스템은 그대로입니다. 게스트 안에서 늘리세요 — macOS는 디스크 유틸리티, Linux는 growpart와 resize2fs입니다.",
   "vmresizing-text": "%s 크기를 변경하는 중…",
-  "vmresized-text": "%s0은(는) 이제 %s1 코어, 메모리 %s2 GB, 디스크 %s3 GB입니다. 다음 시작부터 적용됩니다."
+  "vmresized-text": "%s0은(는) 이제 %s1 코어, 메모리 %s2 GB, 디스크 %s3 GB입니다. 다음 시작부터 적용됩니다.",
+  "vmconsolelogtooltip-text": "콘솔 로그 보기",
+  "vmnoconsolelog-text": "이 VM은 아직 콘솔에 아무것도 출력하지 않았습니다."
 }

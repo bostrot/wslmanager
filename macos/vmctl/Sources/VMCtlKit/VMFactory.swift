@@ -33,8 +33,7 @@ public enum VMFactory {
         // Main disk.
         var storage: [VZStorageDeviceConfiguration] = [
             VZVirtioBlockDeviceConfiguration(
-                attachment: try VZDiskImageStorageDeviceAttachment(
-                    url: store.diskPath(config.name), readOnly: false))
+                attachment: try linuxDiskAttachment(store.diskPath(config.name)))
         ]
         // Installer ISO, while configured.
         if let isoPath = config.isoPath, !isoPath.isEmpty {
@@ -73,8 +72,7 @@ public enum VMFactory {
             vzConfig.serialPorts = [serial]
         } else {
             let serialLog = store.serialLogPath(config.name)
-            FileManager.default.createFile(atPath: serialLog.path, contents: nil)
-            if let fh = FileHandle(forWritingAtPath: serialLog.path) {
+            if let fh = try? SerialLog.openFresh(serialLog.path) {
                 serial.attachment = VZFileHandleSerialPortAttachment(
                     fileHandleForReading: nil, fileHandleForWriting: fh)
                 vzConfig.serialPorts = [serial]
@@ -94,6 +92,33 @@ public enum VMFactory {
 
         try vzConfig.validate()
         return vzConfig
+    }
+
+    /// The writable disk of a Linux guest, with the host page cache on and
+    /// every guest flush carried through to stable storage.
+    ///
+    /// `init(url:readOnly:)` means `.automatic` caching, and on Apple Silicon
+    /// that lets a Linux guest under write load read back blocks that do not
+    /// match what it wrote: ext4 reports metadata checksum errors (EBADMSG)
+    /// on fresh files and freshly installed binaries die with "Exec format
+    /// error" or SIGILL. UTM traced it in utmapp/UTM#4840 and Lima switched
+    /// to `.cached` for the same reason (lima-vm/lima, pkg/driver/vz:
+    /// `DiskImageCachingModeCached`, "to avoid disk corruption on ARM").
+    ///
+    /// Lima pairs it with `.fsync`; this keeps `.full`, the framework's
+    /// default, so a guest `fsync` is an `F_FULLFSYNC` that survives the host
+    /// losing power too — a VM that already lost a filesystem to this is not
+    /// the place to trade durability for apt's speed. Both initialiser and
+    /// enums are macOS 12+, below this package's macOS 13 floor.
+    ///
+    /// macOS guests keep `init(url:readOnly:)`: the corruption reports are
+    /// all Linux guests (virtio-blk under ext4/btrfs), a macOS guest's APFS
+    /// has run on the automatic mode without incident, and changing the I/O
+    /// path of a working macOS install is a risk with nothing to fix.
+    static func linuxDiskAttachment(_ url: URL) throws -> VZDiskImageStorageDeviceAttachment {
+        try VZDiskImageStorageDeviceAttachment(
+            url: url, readOnly: false,
+            cachingMode: .cached, synchronizationMode: .full)
     }
 
     // MARK: macOS guest (Apple Silicon only)

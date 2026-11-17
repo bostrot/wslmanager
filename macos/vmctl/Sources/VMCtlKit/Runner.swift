@@ -17,6 +17,20 @@ public final class VMRunner: NSObject, VZVirtualMachineDelegate {
     private var showSignalSource: DispatchSourceSignal?
     private var consoleRelay: ConsoleRelay?
     private var window: NSWindow?
+    /// Held for the life of the process; released by exit. See `DiskGuard`.
+    private var diskLock: DiskLock?
+    private var shutdownRequested = false
+
+    /// How long a guest gets to shut down after the ACPI power button before
+    /// it is powered off. A Debian guest in the middle of an apt run needs
+    /// systemd's own 90 s stop timeout to get through, and powering off a
+    /// guest that is still writing is how a journal ends up replaying over a
+    /// half-written disk. `vmctl stop` waits longer than this.
+    public static let gracefulStopTimeout: TimeInterval = 120
+
+    /// What the daemon log says when the grace period ran out; `vmctl stop`
+    /// looks for it to report the stop as forced.
+    public static let forcedStopMarker = "Guest did not shut down in time; powering it off."
 
     public init(store: VMStore, config: VMConfig, gui: Bool) {
         self.store = store
@@ -25,6 +39,21 @@ public final class VMRunner: NSObject, VZVirtualMachineDelegate {
     }
 
     public func run() throws -> Never {
+        // Before anything else — before the pid file, the console socket or
+        // the serial log — or a second daemon for the same VM would clobber
+        // the running one's bookkeeping on its way to being refused.
+        // See `DiskGuard.swift`.
+        guard let lock = try DiskLock.tryAcquire(store.diskLockPath(config.name).path) else {
+            throw VmctlError(
+                "The disk of \(config.name) is in use by another instance of it; not starting a second one on the same image.")
+        }
+        diskLock = lock
+        let holders = DiskHolders.pids(store.diskPath(config.name).path)
+        guard holders.isEmpty else {
+            throw VmctlError(
+                "The disk of \(config.name) is still open in process \(holders.map(String.init).joined(separator: ", ")) (a previous run still shutting down, or the image attached in Finder); not starting on it.")
+        }
+
         // Linux guests get an attachable serial console; the relay also owns
         // the serial.log tee the diagnostics read.
         if config.os == .linux {
@@ -150,20 +179,32 @@ public final class VMRunner: NSObject, VZVirtualMachineDelegate {
 
     private func requestShutdown() {
         guard let vm = virtualMachine else { exit(0) }
+        // A second SIGTERM (a retried stop) must not restart the clock.
+        guard !shutdownRequested else { return }
+        shutdownRequested = true
         // Ask the guest first (ACPI power button); force after a grace period.
-        do {
-            try vm.requestStop()
-        } catch {
+        guard vm.canRequestStop else {
+            log("Guest cannot take a shutdown request in state \(vm.state.rawValue); powering it off.")
             forceStop()
             return
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
-            self?.forceStop()
+        do {
+            try vm.requestStop()
+            log("Shutdown requested; waiting up to \(Int(Self.gracefulStopTimeout))s for the guest.")
+        } catch {
+            log("Shutdown request failed (\(error)); powering the guest off.")
+            forceStop()
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.gracefulStopTimeout) { [weak self] in
+            guard let self, let vm = self.virtualMachine, vm.state == .running else { return }
+            self.log(Self.forcedStopMarker)
+            self.forceStop()
         }
     }
 
     private func forceStop() {
-        guard let vm = virtualMachine, vm.state == .running else {
+        guard let vm = virtualMachine, vm.canStop else {
             cleanUpAndExit(0)
         }
         vm.stop { [weak self] _ in
@@ -171,9 +212,21 @@ public final class VMRunner: NSObject, VZVirtualMachineDelegate {
         }
     }
 
+    private func log(_ message: String) {
+        FileHandle.standardError.write(Data("\(message)\n".utf8))
+    }
+
     private func cleanUpAndExit(_ code: Int32) -> Never {
         consoleRelay?.shutdown()
+        // Drop the framework's VM object, then give its XPC service a moment
+        // to close the image before the lock goes: the lock is what the next
+        // start trusts. Bounded — whatever is left is the next start's
+        // `lsof` check to wait out.
+        virtualMachine?.delegate = nil
+        virtualMachine = nil
+        _ = store.waitForDiskReleaseByOthers(config.name, timeout: 5)
         store.clearPid(config.name)
+        diskLock?.release()
         exit(code)
     }
 

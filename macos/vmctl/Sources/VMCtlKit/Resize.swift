@@ -175,8 +175,10 @@ extension VmctlCLI {
         let bag = ArgumentBag(rest, flagNames: [])
         let name = try bag.require("name")
         let config = try store.loadConfig(name)
-        guard !store.isRunning(name) else {
-            throw VmctlError("VM \(name) is running; stop it before resizing.")
+        // Not only the daemon: an image is never truncated while anything —
+        // a lingering XPC service, an `hdiutil` attach — still has it open.
+        guard !store.diskInUse(name) else {
+            throw VmctlError("VM \(name) is running or its disk is still in use; stop it before resizing.")
         }
         // What the guest actually sees, which an imported VM's config does
         // not record (it is saved as 0). The app reads the same number, off

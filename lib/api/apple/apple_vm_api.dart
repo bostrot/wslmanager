@@ -899,6 +899,10 @@ class AppleVmApi extends VmBackend {
           'hdiutil',
           [
             'attach',
+            // Browsing only. Read-write let macOS drop .fseventsd and
+            // Spotlight files onto the guest's EFI partition, the one volume
+            // in a Linux image it can mount.
+            '-readonly',
             '-imagekey',
             'diskimage-class=CRawDiskImage',
             _diskPath(distribution),
@@ -1101,6 +1105,30 @@ class AppleVmApi extends VmBackend {
   /// headless-started VM has its graphics device either way).
   Future<void> showDisplay(String distribution) async {
     await _runChecked(['show', '--name', distribution]);
+  }
+
+  /// Where the daemon writes everything a Linux guest prints on its serial
+  /// console: this boot in `serial.log`, the boot before in `serial.log.1`.
+  List<String> consoleLogPaths(String distribution) {
+    final current = p.join(storeDir, distribution, 'run', 'serial.log');
+    return [current, '$current.1'];
+  }
+
+  /// Open the VM's console logs in the default text editor, newest first.
+  ///
+  /// The log is what shows a boot nobody was watching — an fsck that found
+  /// damage, systemd's emergency shell — so a VM that will not come back
+  /// after a restart can be read instead of guessed at. Returns false when
+  /// the guest has not written anything yet (or is a macOS guest, which has
+  /// no serial console).
+  Future<bool> openConsoleLog(String distribution) async {
+    final logs = consoleLogPaths(distribution).where((path) {
+      final file = File(path);
+      return file.existsSync() && file.lengthSync() > 0;
+    }).toList();
+    if (logs.isEmpty) return false;
+    await shell.run('open', ['-t', ...logs], runInShell: false);
+    return true;
   }
 
   /// Open Terminal.app attached to the VM's serial console, starting the VM

@@ -1360,5 +1360,7 @@
   "vmresizeguestgrows-text": "磁盘变大后，客户机会看到一个更大的块设备；这台 Linux 客户机会在启动时自行扩展根文件系统。",
   "vmresizeguestmanual-text": "磁盘变大后，客户机会看到一个更大的块设备，但文件系统保持原样。请在客户机内部扩展——macOS 用磁盘工具，Linux 用 growpart 和 resize2fs。",
   "vmresizing-text": "正在调整 %s 的规格…",
-  "vmresized-text": "%s0 现在有 %s1 个核心、%s2 GB 内存和 %s3 GB 磁盘，下次启动时生效。"
+  "vmresized-text": "%s0 现在有 %s1 个核心、%s2 GB 内存和 %s3 GB 磁盘，下次启动时生效。",
+  "vmconsolelogtooltip-text": "查看控制台日志",
+  "vmnoconsolelog-text": "此虚拟机尚未向控制台输出任何内容。"
 }

@@ -1359,5 +1359,7 @@
   "vmresizeguestgrows-text": "ディスクを広げるとゲストからはより大きなブロックデバイスとして見えます。この Linux ゲストは起動中にルートファイルシステムを自分で拡張します。",
   "vmresizeguestmanual-text": "ディスクを広げるとゲストからはより大きなブロックデバイスとして見えますが、ファイルシステムはそのままです。ゲストの中で拡張してください — macOS ならディスクユーティリティ、Linux なら growpart と resize2fs です。",
   "vmresizing-text": "%s のサイズを変更しています…",
-  "vmresized-text": "%s0 は %s1 コア、メモリ %s2 GB、ディスク %s3 GB になりました。次回の起動時から有効になります。"
+  "vmresized-text": "%s0 は %s1 コア、メモリ %s2 GB、ディスク %s3 GB になりました。次回の起動時から有効になります。",
+  "vmconsolelogtooltip-text": "コンソールログを表示",
+  "vmnoconsolelog-text": "このVMはまだコンソールに何も出力していません。"
 }

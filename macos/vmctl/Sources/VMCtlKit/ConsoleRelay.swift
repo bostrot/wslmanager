@@ -77,7 +77,7 @@ public final class ConsoleRelay {
     public let vmSideFd: Int32
     private let relayFd: Int32
     private let listenFd: Int32
-    private let logHandle: FileHandle
+    private let log: SerialLog
     public let socketPath: String
 
     private let clientLock = NSLock()
@@ -94,11 +94,7 @@ public final class ConsoleRelay {
         vmSideFd = fds[0]
         relayFd = fds[1]
 
-        FileManager.default.createFile(atPath: logPath, contents: nil)
-        guard let log = FileHandle(forWritingAtPath: logPath) else {
-            throw VmctlError("Could not open \(logPath) for the serial log")
-        }
-        logHandle = log
+        log = try SerialLog(path: logPath)
 
         // A socket file from a previous (crashed) daemon would block bind.
         unlink(socketPath)
@@ -120,7 +116,7 @@ public final class ConsoleRelay {
                 let count = read(relayFd, &buffer, buffer.count)
                 if count <= 0 { break }
                 let data = Data(buffer[0..<count])
-                try? logHandle.write(contentsOf: data)
+                log.write(data)
                 clientLock.lock()
                 let fd = clientFd
                 clientLock.unlock()
@@ -175,5 +171,72 @@ public final class ConsoleRelay {
         close(listenFd)
         close(relayFd)
         unlink(socketPath)
+        log.flush()
+    }
+}
+
+/// The guest's serial output on disk: `serial.log` for this boot,
+/// `serial.log.1` for whatever came before.
+///
+/// This log is the only record of a boot nobody watched — an fsck that
+/// found damage, a root filesystem that would not mount, systemd's
+/// emergency shell — so a start must never wipe the previous one (it used to
+/// truncate it, which turned "my VM won't come back after a restart" into a
+/// guest with no history at all). Two files, each capped at [maxBytes], so a
+/// guest that floods its console cannot fill the host disk.
+public final class SerialLog {
+    public static let defaultMaxBytes: UInt64 = 8 * 1024 * 1024
+
+    public let path: String
+    public let maxBytes: UInt64
+    private var handle: FileHandle
+    private var written: UInt64 = 0
+
+    public static func rotatedPath(_ path: String) -> String { path + ".1" }
+
+    public init(path: String, maxBytes: UInt64 = SerialLog.defaultMaxBytes) throws {
+        self.path = path
+        self.maxBytes = maxBytes
+        handle = try SerialLog.openFresh(path)
+    }
+
+    /// Moves the previous boot's log aside (when it has anything in it) and
+    /// opens an empty one. Also the installer path's entry point, where
+    /// Virtualization.framework writes the handle directly.
+    public static func openFresh(_ path: String) throws -> FileHandle {
+        let fm = FileManager.default
+        let size = (try? fm.attributesOfItem(atPath: path)[.size] as? NSNumber)?
+            .uint64Value ?? 0
+        if size > 0 {
+            let previous = rotatedPath(path)
+            try? fm.removeItem(atPath: previous)
+            try? fm.moveItem(atPath: path, toPath: previous)
+        }
+        fm.createFile(atPath: path, contents: nil)
+        guard let handle = FileHandle(forWritingAtPath: path) else {
+            throw VmctlError("Could not open \(path) for the serial log")
+        }
+        return handle
+    }
+
+    /// Appends [data], rotating first when it would take the file past the
+    /// cap. Called from the relay's single guest-reader thread only.
+    public func write(_ data: Data) {
+        if written > 0, written + UInt64(data.count) > maxBytes {
+            try? handle.close()
+            if let fresh = try? SerialLog.openFresh(path) {
+                handle = fresh
+                written = 0
+            }
+        }
+        try? handle.write(contentsOf: data)
+        written += UInt64(data.count)
+    }
+
+    /// Pushes what was written to disk. Not a close: the reader thread may
+    /// still be mid-write when the daemon shuts down, and the process exit
+    /// right after closes the file anyway.
+    public func flush() {
+        try? handle.synchronize()
     }
 }

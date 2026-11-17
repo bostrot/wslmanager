@@ -134,25 +134,49 @@ public enum DHCPLeases {
     /// 3. one whose name equals [hostname] — systemd-networkd sends a
     ///    machine-id-derived DUID that contains no MAC at all, so for those
     ///    guests the hostname (which the cloud-init seed pins to the VM
-    ///    name) is the only recoverable key. Later blocks win: the file
-    ///    appends, so the newest lease for a reused name is last.
+    ///    name) is the only recoverable key.
+    ///
+    /// Within a level the lease that runs longest wins, which is the one
+    /// granted or renewed last. File order says nothing reliable: bootpd
+    /// prepends new blocks and rewrites renewed ones in place.
+    ///
+    /// The hostname level only considers DUID-style identifiers. A lease
+    /// keyed by a plain six-octet MAC that is not ours belongs to another
+    /// interface — typically an earlier VM of the same name that was deleted
+    /// and recreated with a fresh MAC — and its address is somebody else's
+    /// or nobody's. Matching it by name is how a new VM was reported at its
+    /// predecessor's IP while nothing answered there.
     ///
     /// Expired leases (see [Entry.isCurrent]) are skipped at every level:
-    /// they name an address the guest no longer holds.
+    /// they name an address the guest no longer holds. A current lease is
+    /// still no proof the guest is up — see `VmctlCLI.liveIp`.
     public static func ipFor(
         mac: String, hostname: String? = nil, in text: String, now: Date = Date()
     ) -> String? {
         let target = normalizeMac(mac)
-        var suffixMatch: String?
-        var nameMatch: String?
+        var exact: Entry?
+        var suffix: Entry?
+        var named: Entry?
+        func newer(_ candidate: Entry, than current: Entry?) -> Bool {
+            guard let current else { return true }
+            return (candidate.expiry ?? .distantPast) > (current.expiry ?? .distantPast)
+        }
         for entry in entries(text) where entry.isCurrent(at: now) {
-            if entry.hw == target { return entry.ip }
-            if entry.hw.hasSuffix(":" + target) { suffixMatch = entry.ip }
-            if let hostname, !hostname.isEmpty, entry.name == hostname {
-                nameMatch = entry.ip
+            if entry.hw == target {
+                if newer(entry, than: exact) { exact = entry }
+            } else if entry.hw.hasSuffix(":" + target) {
+                if newer(entry, than: suffix) { suffix = entry }
+            } else if let hostname, !hostname.isEmpty, entry.name == hostname,
+                      !isPlainMac(entry.hw) {
+                if newer(entry, than: named) { named = entry }
             }
         }
-        return suffixMatch ?? nameMatch
+        return (exact ?? suffix ?? named)?.ip
+    }
+
+    /// Six octets: an Ethernet address, as opposed to a DUID client id.
+    static func isPlainMac(_ hw: String) -> Bool {
+        hw.split(separator: ":").count == 6
     }
 
     /// Compatibility shim over [ipFor].
@@ -171,5 +195,50 @@ public enum DHCPLeases {
     /// IP for [mac], or nil while the guest has no lease yet.
     public static func ipForMac(_ mac: String) -> String? {
         ipFor(mac: mac)
+    }
+}
+
+/// Whether a guest actually answers at an address.
+///
+/// A DHCP lease outlives the network stack that took it — bootpd keeps it
+/// current for the whole lease time (an hour on the default
+/// InternetSharing setup) whether or not the guest is still there, so a
+/// guest whose kernel fell over kept being reported at its address and
+/// every `exec` and restart dialled it until ssh gave up.
+public enum GuestReachability {
+    /// True when [ip]:[port] accepts a TCP connection or actively refuses
+    /// one within [timeout]. A refusal (RST) proves a live network stack just
+    /// as well as an accept does, so a guest with no sshd yet still counts.
+    public static func answers(
+        _ ip: String, port: UInt16 = 22, timeout: TimeInterval = 1.0
+    ) -> Bool {
+        var addr = sockaddr_in()
+        addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_port = port.bigEndian
+        guard inet_pton(AF_INET, ip, &addr.sin_addr) == 1 else { return false }
+
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        guard fd >= 0 else { return false }
+        defer { close(fd) }
+        _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
+
+        let result = withUnsafePointer(to: &addr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        if result == 0 { return true }
+        if errno == ECONNREFUSED { return true }
+        guard errno == EINPROGRESS else { return false }
+
+        var watched = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
+        guard poll(&watched, 1, Int32(timeout * 1000)) > 0 else { return false }
+        var error: Int32 = 0
+        var length = socklen_t(MemoryLayout<Int32>.size)
+        guard getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &length) == 0 else {
+            return false
+        }
+        return error == 0 || error == ECONNREFUSED
     }
 }

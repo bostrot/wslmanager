@@ -177,11 +177,12 @@ class VmRestartService {
     return vm;
   }
 
-  /// Returns true when the guest had to be powered off.
+  /// Returns true when the guest had to be powered off — by `--force` here,
+  /// or by the helper's own daemon once the guest ignored the shutdown
+  /// request for its whole grace period (`"forced": true` in the reply).
   Future<bool> _stop(String name, {required bool allowForce}) async {
     try {
-      await _runHelper(['stop', '--name', name]);
-      return false;
+      return _replySaysForced(await _runHelper(['stop', '--name', name]));
     } on VmRestartException catch (error) {
       // Whether forcing is the answer is a question about the VM, not about
       // the wording of the complaint: a stop that failed and left nothing
@@ -235,7 +236,16 @@ class VmRestartService {
     }
   }
 
-  Future<void> _runHelper(List<String> args) async {
+  static bool _replySaysForced(String stdout) {
+    try {
+      final decoded = json.decode(stdout.trim());
+      return decoded is Map && decoded['forced'] == true;
+    } on FormatException {
+      return false;
+    }
+  }
+
+  Future<String> _runHelper(List<String> args) async {
     final ProcessResult result;
     try {
       result = await api.shell.run(
@@ -255,5 +265,6 @@ class VmRestartService {
           ? stderr
           : 'vmctl ${args.join(' ')} failed with exit code ${result.exitCode}');
     }
+    return result.stdout.toString();
   }
 }

@@ -95,6 +95,19 @@ void main() {
       expect(result.ip, '192.168.64.10');
     });
 
+    test('a guest the helper had to power off is reported as forced',
+        () async {
+      // The daemon's own grace period ran out: no --force from here, but
+      // the guest was still powered off and the caller should hear so.
+      shell.responseQueue['list'] = [_running, _stopped, _running];
+      shell.responses['stop'] =
+          '{"diskReleased":true,"forced":true,"stopped":"dev"}';
+      final result = await serviceWith().restart('dev');
+
+      expect(vmctlCalls()[1], isNot(contains('--force')));
+      expect(result.forced, isTrue);
+    });
+
     test('gui opens the display window instead', () async {
       shell.responseQueue['list'] = [_running, _stopped, _running];
       final result = await serviceWith().restart('dev', gui: true);

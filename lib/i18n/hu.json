@@ -1359,5 +1359,7 @@
   "vmresizeguestgrows-text": "A nagyobb lemez nagyobb blokkeszközként jelenik meg a vendégben; ez a Linux vendég indításkor magától megnöveli a saját gyökér-fájlrendszerét.",
   "vmresizeguestmanual-text": "A nagyobb lemez nagyobb blokkeszközként jelenik meg a vendégben, de a vendég megtartja a meglévő fájlrendszerét. Növeld meg a vendégen belül — macOS alatt a Lemezkezelővel, Linuxon growpart és resize2fs paranccsal.",
   "vmresizing-text": "%s átméretezése…",
-  "vmresized-text": "%s0 mostantól %s1 magot, %s2 GB memóriát és %s3 GB lemezt kap. A következő indításkor lép életbe."
+  "vmresized-text": "%s0 mostantól %s1 magot, %s2 GB memóriát és %s3 GB lemezt kap. A következő indításkor lép életbe.",
+  "vmconsolelogtooltip-text": "Konzolnapló megtekintése",
+  "vmnoconsolelog-text": "Ez a VM még semmit nem írt a konzoljára."
 }

@@ -498,6 +498,30 @@ void main() {
     });
   });
 
+  group('console log', () {
+    test('opens this boot and the previous one, newest first', () async {
+      final run = Directory('${tempStore.path}/ubuntu/run')
+        ..createSync(recursive: true);
+      File('${run.path}/serial.log').writeAsStringSync('login: ');
+      File('${run.path}/serial.log.1')
+          .writeAsStringSync('EXT4-fs error: bad checksum');
+      expect(await api.openConsoleLog('ubuntu'), isTrue);
+      final open = shell.calls.singleWhere((c) => c.first == 'open');
+      expect(open.sublist(1, 2), ['-t']);
+      expect(open[2], endsWith('serial.log'));
+      expect(open[3], endsWith('serial.log.1'));
+    });
+
+    test('a guest that printed nothing has no log to open', () async {
+      final run = Directory('${tempStore.path}/quiet/run')
+        ..createSync(recursive: true);
+      File('${run.path}/serial.log').writeAsStringSync('');
+      expect(await api.openConsoleLog('quiet'), isFalse);
+      expect(await api.openConsoleLog('missing'), isFalse);
+      expect(shell.calls.any((c) => c.first == 'open'), isFalse);
+    });
+  });
+
   group('startExplorer / disk mounting', () {
     test('a stopped VM with a mountable partition opens the volume',
         () async {
@@ -511,6 +535,9 @@ void main() {
           shell.calls.where((c) => c.first == 'start:open').toList();
       expect(opened, isNotEmpty);
       expect(opened.first.last, '/Volumes/EFI BOOT');
+      // Browsing must never write to the guest's own partitions.
+      final attach = shell.calls.firstWhere((c) => c.contains('attach'));
+      expect(attach, contains('-readonly'));
     });
 
     test('an unmountable disk detaches again and opens the VM folder',
