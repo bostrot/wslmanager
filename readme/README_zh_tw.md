@@ -64,10 +64,10 @@
      in a debug build); a release has none of them, so the README must not
      promise them. Lift the comment together with the gate.
 
-**Docker 與 Podman 容器**
+**Docker、Podman 與 WSL 容器**
 - [x] 在執行個體旁邊看到機器上的每一個容器 —— 兩種引擎同時呈現
-- [x] 不必離開應用程式即可啟動、停止、重新啟動、移除容器並追蹤其記錄
-- [x] 僅是前端：它驅動你既有的 `docker`/`podman`，不會安裝任何東西
+- [x] 不必離開應用程式即可從映像建立容器，並啟動、停止、重新啟動、移除容器及追蹤其記錄
+- [x] 僅是前端：它驅動你既有的 `docker`、`podman` 或 WSL 內建的 `wslc`，不會安裝任何東西
 - [x] AI 聊天與 MCP 伺服器取得同一套容器工具
 
 **Kubernetes 叢集**

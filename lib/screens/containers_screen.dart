@@ -2,6 +2,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:localization/localization.dart';
 import 'package:wsl2distromanager/api/containers/container_models.dart';
 import 'package:wsl2distromanager/api/containers/container_service.dart';
+import 'package:wsl2distromanager/dialogs/create_container_dialog.dart';
 import 'package:wsl2distromanager/components/empty_state.dart';
 import 'package:wsl2distromanager/components/helpers.dart';
 import 'package:wsl2distromanager/components/notify.dart';
@@ -154,93 +155,126 @@ class _ContainersPageState extends State<ContainersPage> {
     );
   }
 
+  /// Open the create form, carrying the engines this screen already probed so
+  /// the dialog does not pay for a second probe.
+  void _create(BuildContext host, ContainerSnapshot data) {
+    showCreateContainerDialog(
+      host,
+      service: _service,
+      engines: data.engines,
+      active: _service.preferredEngine,
+      onCreated: _reload,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(12.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    // One builder over the whole screen, not just the list: the Create button
+    // is only usable once an engine has been found, and that answer arrives
+    // with the same snapshot the rows come from.
+    return FutureBuilder<ContainerSnapshot>(
+      key: const ValueKey('test-container-list'),
+      future: _snapshot,
+      builder: (context, snapshot) {
+        final data = snapshot.hasError ? null : snapshot.data;
+        return Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4.0, bottom: 4.0),
-                      child: Text('containers-text'.i18n(),
-                          style:
-                              FluentTheme.of(context).typography.titleLarge),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4.0, bottom: 8.0),
-                      child: Text('containersinfo-text'.i18n(),
-                          style: TextStyle(
-                              color: secondaryTextColor(context),
-                              fontSize: 12)),
-                    ),
-                  ],
-                ),
+              _header(context, data),
+              Expanded(child: _body(context, snapshot)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _header(BuildContext context, ContainerSnapshot? data) {
+    final canCreate = data != null && data.engines.isNotEmpty;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 4.0, bottom: 4.0),
+                child: Text('containers-text'.i18n(),
+                    style: FluentTheme.of(context).typography.titleLarge),
               ),
-              Button(
-                key: const ValueKey('test-containers-refresh'),
-                onPressed: () => _reload(rescanEngines: true),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(FluentIcons.refresh),
-                    const SizedBox(width: 8),
-                    Text('refresh-text'.i18n()),
-                  ],
-                ),
+              Padding(
+                padding: const EdgeInsets.only(left: 4.0, bottom: 8.0),
+                child: Text('containersinfo-text'.i18n(),
+                    style: TextStyle(
+                        color: secondaryTextColor(context), fontSize: 12)),
               ),
             ],
           ),
-          Expanded(
-            child: FutureBuilder<ContainerSnapshot>(
-              key: const ValueKey('test-container-list'),
-              future: _snapshot,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return EmptyState(
-                    key: const ValueKey('test-containers-error'),
-                    icon: FluentIcons.error,
-                    title: 'containerenginefailed-text'.i18n(),
-                    body: '${snapshot.error}',
-                  );
-                }
-                final data = snapshot.data;
-                if (data == null) {
-                  return const Center(child: ProgressRing());
-                }
-                if (data.engines.isEmpty) {
-                  return EmptyState(
-                    key: const ValueKey('test-containers-no-engine'),
-                    icon: FluentIcons.blocked,
-                    title: 'nocontainerengine-text'.i18n(),
-                    body: 'nocontainerenginehint-text'.i18n(),
-                  );
-                }
-                if (data.containers.isEmpty) {
-                  return EmptyState(
-                    key: const ValueKey('test-containers-empty'),
-                    icon: FluentIcons.package,
-                    title: 'nocontainers-text'.i18n(),
-                    body: 'nocontainershint-text'.i18n(),
-                  );
-                }
-                return ListView.builder(
-                  itemCount: data.containers.length,
-                  itemBuilder: (context, index) =>
-                      _row(context, data.containers[index]),
-                );
-              },
-            ),
+        ),
+        FilledButton(
+          key: const ValueKey('test-containers-create'),
+          onPressed: canCreate ? () => _create(context, data) : null,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(FluentIcons.add),
+              const SizedBox(width: 8),
+              Text('createcontainer-text'.i18n()),
+            ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 8),
+        Button(
+          key: const ValueKey('test-containers-refresh'),
+          onPressed: () => _reload(rescanEngines: true),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(FluentIcons.refresh),
+              const SizedBox(width: 8),
+              Text('refresh-text'.i18n()),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _body(BuildContext context, AsyncSnapshot<ContainerSnapshot> snapshot) {
+    if (snapshot.hasError) {
+      return EmptyState(
+        key: const ValueKey('test-containers-error'),
+        icon: FluentIcons.error,
+        title: 'containerenginefailed-text'.i18n(),
+        body: '${snapshot.error}',
+      );
+    }
+    final data = snapshot.data;
+    if (data == null) {
+      return const Center(child: ProgressRing());
+    }
+    if (data.engines.isEmpty) {
+      return EmptyState(
+        key: const ValueKey('test-containers-no-engine'),
+        icon: FluentIcons.blocked,
+        title: 'nocontainerengine-text'.i18n(),
+        body: 'nocontainerenginehint-text'.i18n(),
+      );
+    }
+    if (data.containers.isEmpty) {
+      return EmptyState(
+        key: const ValueKey('test-containers-empty'),
+        icon: FluentIcons.package,
+        title: 'nocontainers-text'.i18n(),
+        body: 'nocontainershint-text'.i18n(),
+      );
+    }
+    return ListView.builder(
+      itemCount: data.containers.length,
+      itemBuilder: (context, index) => _row(context, data.containers[index]),
     );
   }
 

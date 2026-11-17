@@ -44,7 +44,8 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(FluentApp(
       home: ScaffoldPage(
-        content: ContainersPage(service: ContainerService(shell: shell)),
+        content: ContainersPage(
+            service: ContainerService(shell: shell, isWindows: false)),
       ),
     ));
     await tester.pumpAndSettle();
@@ -183,4 +184,183 @@ void main() {
 
     expect(find.textContaining('web (running-text)'), findsOneWidget);
   });
+
+  group('creating a container', () {
+    /// Open the create form from the header button.
+    Future<void> openCreate(WidgetTester tester) async {
+      await tester.tap(find.byKey(const ValueKey('test-containers-create')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the button is offered once an engine has answered',
+        (tester) async {
+      await pump(tester);
+      final button = tester.widget<FilledButton>(
+          find.byKey(const ValueKey('test-containers-create')));
+      expect(button.onPressed, isNotNull);
+      expect(find.text('createcontainer-text'), findsOneWidget);
+    });
+
+    testWidgets('the button is dead while no engine is installed',
+        (tester) async {
+      // Nothing to create *with*: the empty state explains, and the button
+      // must not open a form whose every submit would fail.
+      shell.missing.addAll(['docker', 'podman']);
+      await pump(tester);
+
+      final button = tester.widget<FilledButton>(
+          find.byKey(const ValueKey('test-containers-create')));
+      expect(button.onPressed, isNull);
+    });
+
+    testWidgets('an image alone is enough, and becomes a detached run',
+        (tester) async {
+      await pump(tester);
+      await openCreate(tester);
+      expect(find.byKey(const ValueKey('test-create-container-dialog')),
+          findsOneWidget);
+
+      await tester.enterText(
+          find.byKey(const ValueKey('test-create-image')), 'alpine');
+      await tester.tap(
+          find.byKey(const ValueKey('test-create-container-submit')));
+      await tester.pumpAndSettle();
+
+      expect(ran(), contains('docker run --detach alpine'));
+      // Closed on success, and the list reloaded behind it.
+      expect(find.byKey(const ValueKey('test-create-container-dialog')),
+          findsNothing);
+      expect(messages.any((m) => m.contains('createdcontainer-text')), isTrue);
+    });
+
+    testWidgets('every field reaches the engine as its own flag',
+        (tester) async {
+      await pump(tester);
+      await openCreate(tester);
+
+      await tester.enterText(
+          find.byKey(const ValueKey('test-create-image')), 'nginx:1.27');
+      await tester.enterText(
+          find.byKey(const ValueKey('test-create-name')), 'web');
+      await tester.enterText(
+          find.byKey(const ValueKey('test-create-ports')), '127.0.0.1:8080:80');
+      await tester.enterText(
+          find.byKey(const ValueKey('test-create-volumes')), 'mydata:/data');
+      await tester.enterText(
+          find.byKey(const ValueKey('test-create-env')), 'TZ=Europe/Berlin');
+      await tester.enterText(
+          find.byKey(const ValueKey('test-create-command')), 'sleep 3600');
+      await tester.tap(find.byKey(const ValueKey('test-create-rm')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+          find.byKey(const ValueKey('test-create-container-submit')));
+      await tester.pumpAndSettle();
+
+      expect(
+          ran(),
+          contains('docker run --detach --rm --name web '
+              '--publish 127.0.0.1:8080:80 --volume mydata:/data '
+              '--env TZ=Europe/Berlin nginx:1.27 sleep 3600'));
+    });
+
+    testWidgets('a bad port is reported at the box and nothing is run',
+        (tester) async {
+      await pump(tester);
+      await openCreate(tester);
+      final before = ran().length;
+
+      await tester.enterText(
+          find.byKey(const ValueKey('test-create-image')), 'alpine');
+      await tester.enterText(
+          find.byKey(const ValueKey('test-create-ports')), '99999:80');
+      await tester.tap(
+          find.byKey(const ValueKey('test-create-container-submit')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('test-create-ports-error')),
+          findsOneWidget);
+      expect(find.text('containerportinvalid-text'), findsOneWidget);
+      // The form is still open and the engine was never asked.
+      expect(find.byKey(const ValueKey('test-create-container-dialog')),
+          findsOneWidget);
+      expect(ran().length, before);
+    });
+
+    testWidgets('an image that looks like a flag never reaches the engine',
+        (tester) async {
+      await pump(tester);
+      await openCreate(tester);
+      final before = ran().length;
+
+      await tester.enterText(find.byKey(const ValueKey('test-create-image')),
+          '--privileged');
+      await tester.tap(
+          find.byKey(const ValueKey('test-create-container-submit')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('containerflaglike-text'), findsOneWidget);
+      expect(ran().length, before);
+    });
+
+    testWidgets("the engine's own refusal is shown and the form stays open",
+        (tester) async {
+      // "port is already allocated" is worth reading, and retrying after
+      // editing one box beats retyping the whole form.
+      shell.exitCodes['docker run'] = 125;
+      shell.errors['docker run'] =
+          'docker: Error response from daemon: port is already allocated.';
+      await pump(tester);
+      await openCreate(tester);
+
+      await tester.enterText(
+          find.byKey(const ValueKey('test-create-image')), 'alpine');
+      await tester.tap(
+          find.byKey(const ValueKey('test-create-container-submit')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('test-create-container-dialog')),
+          findsOneWidget);
+      expect(find.textContaining('port is already allocated'), findsOneWidget);
+    });
+
+    testWidgets('with two engines the form asks which one', (tester) async {
+      await pump(tester);
+      await openCreate(tester);
+      expect(find.byKey(const ValueKey('test-create-engine')), findsOneWidget);
+    });
+
+    testWidgets('a pin naming an uninstalled engine does not break the picker',
+        (tester) async {
+      // The pin in settings outlives the engine it names. The picker shows
+      // the stale value without complaining, so the symptom is not a crash:
+      // the run went to `wslc` on a host that has no wslc, and a whole
+      // filled-in form came back as "command not found".
+      // wslc is a real engine the pin can name and this host cannot have —
+      // so the picker is shown (docker and podman both answered) with a
+      // pinned value that is not one of its two items.
+      SharedPreferences.setMockInitialValues({'ContainerEngine': 'wslc'});
+      prefs = await SharedPreferences.getInstance();
+      await pump(tester);
+      await openCreate(tester);
+
+      expect(find.byKey(const ValueKey('test-create-engine')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.enterText(
+          find.byKey(const ValueKey('test-create-image')), 'alpine');
+      await tester.tap(
+          find.byKey(const ValueKey('test-create-container-submit')));
+      await tester.pumpAndSettle();
+
+      // Falls back to the engine that is actually there.
+      expect(ran(), contains('docker run --detach alpine'));
+    });
+
+    testWidgets('with one engine there is nothing to pick', (tester) async {
+      shell.missing.add('podman');
+      await pump(tester);
+      await openCreate(tester);
+      expect(find.byKey(const ValueKey('test-create-engine')), findsNothing);
+    });
+  });
+
 }

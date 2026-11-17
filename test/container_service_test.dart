@@ -22,8 +22,15 @@ void main() {
     shell = FakeContainerShell();
   });
 
-  ContainerService service({Duration? timeout}) => ContainerService(
-      shell: shell, timeout: timeout ?? const Duration(seconds: 30));
+  /// Off Windows by default, which is where the pre-`wslc` expectations
+  /// below were written: the Windows-only engine is probed only when a test
+  /// asks for a Windows host, so the same assertions hold on the Windows CI
+  /// job as on a Mac.
+  ContainerService service({Duration? timeout, bool isWindows = false}) =>
+      ContainerService(
+          shell: shell,
+          isWindows: isWindows,
+          timeout: timeout ?? const Duration(seconds: 30));
 
   group('parsePsOutput', () {
     test('reads every field of a row', () {
@@ -393,6 +400,240 @@ void main() {
           service().logs(ContainerEngine.docker, 'web', since: '2026-09-01'),
           throwsArgumentError);
       expect(shell.calls, isEmpty);
+    });
+  });
+
+  // WSL's own container CLI (bostrot/ai-tasks#111).
+  //
+  // Every expectation here was taken from `wslc 3.0.1.0` on a Windows host:
+  // its own `--help`, and the output of a container run through it.
+  group('wslc', () {
+    /// A container as `wslc list --format json` really prints it: one object
+    /// per line, English keys, `State` separate from the human `Status`.
+    String wslcJson({
+      String id = '3a8ffd6b4238e460ea095a16d96c472d7df973d40fad5f1ea3ef8cc2926f3bf5',
+      String name = 'web',
+      String image = 'alpine',
+      String state = 'running',
+      String status = 'Up 16 seconds',
+      String ports = '',
+    }) =>
+        '{"Command":"\\"sleep 900\\"","CreatedAt":"2026-10-01 21:10:05 '
+        '+0200 '
+        'MESZ","HealthStatus":"","ID":"$id","Image":"$image","Labels":'
+        '"com.microsoft.wsl.container.metadata={}","LocalVolumes":"0",'
+        '"Mounts":"","Names":"$name","Networks":"bridge","Ports":"$ports",'
+        '"RunningFor":"19 seconds ago","Size":"0B","State":"$state",'
+        '"Status":"$status"}';
+
+    test('is not probed off Windows', () async {
+      expect(await service().availableEngines(),
+          [ContainerEngine.docker, ContainerEngine.podman]);
+      expect(shell.calls.map((call) => call.first), isNot(contains('wslc')));
+    });
+
+    test('is probed on Windows, with the flag it shares with Docker',
+        () async {
+      // `wslc` answers both `wslc version` and `wslc --version`; the shared
+      // spelling keeps the probe one line for every engine.
+      final engines = await service(isWindows: true).availableEngines();
+      expect(engines, contains(ContainerEngine.wslc));
+      expect(shell.calls, contains(equals(['wslc', '--version'])));
+    });
+
+    test('counts as an engine when Docker and Podman are both missing',
+        () async {
+      shell.missing.addAll(['docker', 'podman']);
+      final api = service(isWindows: true);
+      expect(await api.availableEngines(), [ContainerEngine.wslc]);
+      expect(await api.activeEngine(), ContainerEngine.wslc);
+    });
+
+    test('Docker still wins the automatic pick when both are installed',
+        () async {
+      expect(await service(isWindows: true).activeEngine(),
+          ContainerEngine.docker);
+    });
+
+    test('is listed with json, not a template it has no language for',
+        () async {
+      shell.responses['wslc ps'] = wslcJson(name: 'web');
+      final containers =
+          await service(isWindows: true).list(engine: ContainerEngine.wslc);
+
+      expect(shell.calls.last,
+          ['wslc', 'ps', '--all', '--no-trunc', '--format', 'json']);
+      expect(containers.single.name, 'web');
+      expect(containers.single.image, 'alpine');
+      expect(containers.single.state, ContainerState.running);
+      expect(containers.single.engine, ContainerEngine.wslc);
+    });
+
+    test("Docker's own verbs reach it unchanged", () async {
+      // Verified aliases: `ps`, `rm --force`, `logs`, `inspect`, `stop`.
+      final api = service(isWindows: true);
+      await api.stop(ContainerEngine.wslc, 'web');
+      expect(shell.calls.last, ['wslc', 'stop', 'web']);
+
+      await api.remove(ContainerEngine.wslc, 'web', force: true);
+      expect(shell.calls.last, ['wslc', 'rm', '--force', 'web']);
+
+      await api.inspect(ContainerEngine.wslc, 'web');
+      expect(shell.calls.last, ['wslc', 'inspect', 'web']);
+
+      shell.responses['wslc exec'] = 'root';
+      await api.exec(ContainerEngine.wslc, 'web', 'whoami');
+      expect(shell.calls.last, ['wslc', 'exec', 'web', 'sh', '-c', 'whoami']);
+    });
+
+    test('a text-only read is left in the engine\'s own table', () async {
+      // There is no template to ask for, and `--format json` would turn a
+      // readable table into one object per line for no gain.
+      final api = service(isWindows: true);
+      shell.responses['wslc images'] = 'REPOSITORY   TAG';
+      shell.responses['wslc volume'] = 'DRIVER   VOLUME NAME';
+      shell.responses['wslc network'] = 'NETWORK ID   NAME';
+      await api.images(ContainerEngine.wslc);
+      expect(shell.calls.last, ['wslc', 'images']);
+      await api.volumes(ContainerEngine.wslc);
+      expect(shell.calls.last, ['wslc', 'volume', 'ls']);
+      // `network ls` exists on wslc 3.0.1, unlike `top` and `system df`.
+      await api.networks(ContainerEngine.wslc);
+      expect(shell.calls.last, ['wslc', 'network', 'ls']);
+    });
+
+    test('stats is one sample already, so --no-stream is never sent',
+        () async {
+      // Sending it fails the call outright: "Der Optionsname wurde für den
+      // aktuellen Befehl --no-stream nicht erkannt".
+      shell.responses['wslc stats'] = '{"Name":"web","CPUPerc":"0.00%"}';
+      await service(isWindows: true).stats(ContainerEngine.wslc, ref: 'web');
+      expect(shell.calls.last, ['wslc', 'stats', 'web']);
+      expect(shell.calls.last, isNot(contains('--no-stream')));
+    });
+
+    test('a log window is sent as an instant, not a duration', () async {
+      // `--since 15m` is read as epoch 15 — "since 1970" — with no error,
+      // so the duration is resolved against the clock before it is sent.
+      shell.responses['wslc logs'] = 'listening on :80';
+      final before = DateTime.now().toUtc();
+      await service(isWindows: true)
+          .logs(ContainerEngine.wslc, 'web', lines: 50, since: '15m');
+
+      final call = shell.calls.last;
+      expect(call.take(4), ['wslc', 'logs', '--tail', '50']);
+      expect(call.last, 'web');
+      final sent = call.firstWhere((arg) => arg.startsWith('--since='));
+      final epoch = int.parse(sent.split('=').last);
+      final asked = before.subtract(const Duration(minutes: 15));
+      expect(epoch * 1000,
+          closeTo(asked.millisecondsSinceEpoch, const Duration(minutes: 1).inMilliseconds));
+    });
+
+    test('Docker keeps the duration it understands', () async {
+      shell.responses['docker logs'] = 'line';
+      await service().logs(ContainerEngine.docker, 'web', since: '15m');
+      expect(shell.calls.last, contains('--since=15m'));
+    });
+
+    test('a read it has no command for is refused without a process',
+        () async {
+      // `wslc system df` and `wslc top` answer "Nicht erkannter Befehl" —
+      // and would do so in whatever language Windows is set to.
+      final api = service(isWindows: true);
+      for (final read in [
+        () => api.diskUsage(ContainerEngine.wslc),
+        () => api.processes(ContainerEngine.wslc, 'web'),
+      ]) {
+        await expectLater(
+            read(),
+            throwsA(isA<ContainerException>().having((e) => e.message,
+                'message', contains('WSL container has no'))));
+      }
+      expect(shell.calls, isEmpty);
+    });
+
+    test('a refusing engine is reported in its own words', () async {
+      shell.exitCodes['wslc ps'] = 1;
+      shell.errors['wslc ps'] = 'Der WSL-Containerdienst wird nicht ausgeführt';
+
+      await expectLater(
+          service(isWindows: true).list(engine: ContainerEngine.wslc),
+          throwsA(isA<ContainerException>().having((e) => e.message, 'message',
+              contains('nicht ausgeführt'))));
+      expect(shell.calls, hasLength(1));
+    });
+
+    test('the engine is offered in settings as an engine like any other', () {
+      // The Settings dropdown and the MCP engine argument both enumerate the
+      // engines, so the executable is the contract.
+      expect(ContainerEngine.byExecutable('wslc'), ContainerEngine.wslc);
+      expect(ContainerEngine.wslc.cli, ContainerCli.wslc);
+    });
+  });
+
+  group('parseJsonOutput', () {
+    test('reads one object per line, as the engine prints them', () {
+      final containers = ContainerService.parseJsonOutput(
+        '{"ID":"a1","Names":"web","Image":"nginx","State":"running",'
+        '"Status":"Up 2 hours","Ports":"0.0.0.0:8080->80/tcp"}\n'
+        '{"ID":"b2","Names":"db","Image":"postgres:16","State":"exited",'
+        '"Status":"Exited (0) 3 minutes ago","Ports":""}',
+        ContainerEngine.wslc,
+      );
+
+      expect(containers.map((c) => c.name), ['web', 'db']);
+      expect(containers.first.ports, '0.0.0.0:8080->80/tcp');
+      expect(containers.first.state, ContainerState.running);
+      expect(containers.last.state, ContainerState.exited);
+      expect(containers.last.status, 'Exited (0) 3 minutes ago');
+      expect(containers.last.ports, isEmpty);
+    });
+
+    test('a line that is not JSON does not take the listing with it', () {
+      final containers = ContainerService.parseJsonOutput(
+        'WSL container is in preview.\n'
+        '{"ID":"a1","Names":"web","Image":"nginx","State":"running"}\n'
+        '{ truncated',
+        ContainerEngine.wslc,
+      );
+      expect(containers.single.ref, 'web');
+    });
+
+    test('falls back to the status word when State is absent', () {
+      final containers = ContainerService.parseJsonOutput(
+        '{"ID":"a1","Names":"web","Status":"Exited (0) 3 minutes ago"}',
+        ContainerEngine.wslc,
+      );
+      expect(containers.single.state, ContainerState.exited);
+    });
+
+    test('an object with neither id nor name is not a row', () {
+      expect(
+          ContainerService.parseJsonOutput(
+              '{"Image":"nginx","State":"running"}', ContainerEngine.wslc),
+          isEmpty);
+    });
+
+    test('an array is decoded whole, in case an engine answers with one', () {
+      final containers = ContainerService.parseJsonOutput(
+        '[\n  {"ID":"a1","Names":"web","State":"running"},\n'
+        '  {"ID":"b2","Names":"db","State":"exited"}\n]',
+        ContainerEngine.wslc,
+      );
+      expect(containers.map((c) => c.ref), ['web', 'db']);
+    });
+
+    test('several names collapse to the one the engine shows first', () {
+      final containers = ContainerService.parseJsonOutput(
+          '{"ID":"a1","Names":"web,web-alias","State":"running"}',
+          ContainerEngine.docker);
+      expect(containers.single.name, 'web');
+    });
+
+    test('no containers is an empty list, not an error', () {
+      expect(
+          ContainerService.parseJsonOutput('', ContainerEngine.wslc), isEmpty);
     });
   });
 }

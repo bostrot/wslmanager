@@ -66,10 +66,10 @@
      in a debug build); a release has none of them, so the README must not
      promise them. Lift the comment together with the gate.
 
-**Docker ve Podman kapsayıcıları**
+**Docker, Podman ve WSL kapsayıcıları**
 - [x] Makinedeki her kapsayıcıyı — iki motoru da aynı anda — örneklerinizin yanında görün
-- [x] Uygulamadan çıkmadan bir kapsayıcıyı başlatın, durdurun, yeniden başlatın, kaldırın ve günlüklerini izleyin
-- [x] Yalnızca ön yüz: zaten kurulu olan `docker`/`podman` komutunuzu kullanır ve hiçbir şey kurmaz
+- [x] Uygulamadan çıkmadan bir imajdan kapsayıcı oluşturun; ardından başlatın, durdurun, yeniden başlatın, kaldırın ve günlüklerini izleyin
+- [x] Yalnızca ön yüz: zaten kurulu olan `docker`, `podman` ya da WSL'in yerleşik `wslc` komutunu kullanır ve hiçbir şey kurmaz
 - [x] Yapay zekâ sohbeti ve MCP sunucusu aynı kapsayıcı araçlarını alır
 
 **Kubernetes kümeleri**

@@ -5,7 +5,7 @@
 // WSL-specific families (wsl.conf, .wslconfig, packaging, mounting,
 // diskpart) are only registered when the backend is WSL, and the Apple
 // backend brings its own vm_* creation tools. The container_* family is
-// registered everywhere: a Docker/Podman engine belongs to the host, not to
+// registered everywhere: a container engine belongs to the host, not to
 // the backend driving its instances (bostrot/ai-tasks#57).
 //
 // The kube_* and cloud_* families (bostrot/ai-tasks#67) carry the same idea
@@ -1843,9 +1843,10 @@ List<McpTool> _terminalTools(WslTerminalManager terminalManager) {
 /// both have one — or neither, in which case each tool says so instead of
 /// failing obscurely (bostrot/ai-tasks#57).
 ///
-/// Every tool takes an optional `engine`, because a host can run Docker and
-/// Podman side by side and a bare name is ambiguous there. Omitted, it
-/// resolves through the engine the user pinned in Settings.
+/// Every tool takes an optional `engine`, because a host can run Docker,
+/// Podman and WSL's own `wslc` side by side and a bare name is ambiguous
+/// there. Omitted, it resolves through the engine the user pinned in
+/// Settings.
 List<McpTool> _containerTools(ContainerService service) {
   Future<ContainerEngine> resolveEngine(Map<String, dynamic> args) async {
     final requested = (args['engine'] as String?)?.trim();
@@ -1866,8 +1867,9 @@ List<McpTool> _containerTools(ContainerService service) {
 
   const engineProperty = {
     'type': 'string',
-    'description': 'Container engine to use: "docker" or "podman". Defaults '
-        'to the engine configured in the app.',
+    'description': 'Container engine to use: "docker", "podman" or "wslc" '
+        '(WSL\'s built-in engine, Windows only). Defaults to the engine '
+        'configured in the app.',
   };
   const containerProperty = {
     'type': 'string',
@@ -1878,9 +1880,10 @@ List<McpTool> _containerTools(ContainerService service) {
     McpTool(
       name: 'container_list',
       description:
-          'List Docker/Podman containers on this host with their state, '
-          'image and published ports. Containers are separate from WSL '
-          'distros and VMs — use wsl_list_distros for those.',
+          'List the containers on this host — Docker, Podman or WSL\'s own '
+          'wslc engine — with their state, image and published ports. '
+          'Containers are separate from WSL distros and VMs — use '
+          'wsl_list_distros for those.',
       inputSchema: const {
         'type': 'object',
         'properties': {

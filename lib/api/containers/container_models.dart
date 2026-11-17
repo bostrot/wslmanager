@@ -7,26 +7,67 @@
 // things and a delete that is destructive in one case and free in the other,
 // so they keep their own model, their own screen and their own MCP tools.
 
+/// How an engine's CLI differs from Docker's, where it does.
+///
+/// Verified against `wslc 3.0.1.0`: the verbs are the same, and Docker's
+/// spellings are all accepted as aliases (`ps`, `volume ls`, `network ls`,
+/// `rm --force`, `--version`). What differs is narrow enough to name:
+/// `--format` is a vocabulary rather than a template language, `stats` takes
+/// one sample and refuses `--no-stream`, `--since` is an instant rather than
+/// a duration, and `top`/`system df` do not exist. One value per shape rather
+/// than one per engine, because Podman reproduces Docker's grammar exactly.
+enum ContainerCli {
+  /// Docker's own grammar, which Podman reproduces: `--format` takes a Go
+  /// template, `stats` streams until `--no-stream` stops it, `--since` takes
+  /// a duration.
+  docker,
+
+  /// WSL's built-in `wslc.exe`. `--format` takes `json` or `table` and
+  /// nothing else — `json` being one object per line, with English keys
+  /// whatever the Windows display language, which is why it is the listing
+  /// the app parses and the localised table is only passed through as text.
+  wslc,
+}
+
 /// A container engine the app can drive, in the order [ContainerService]
 /// probes for one.
 ///
 /// Only CLI-compatible engines belong here: everything below goes through the
-/// same `ps/start/stop/rm/logs/exec` argument shapes, which is what lets one
-/// service speak to all of them.
+/// same `start/stop/rm/logs/exec` verbs, which is what lets one service speak
+/// to all of them. Where the spelling differs, [cli] says how.
 enum ContainerEngine {
   /// Docker Engine / Docker Desktop.
   docker('docker', 'Docker'),
 
   /// Podman, including `podman machine` on macOS and Windows.
-  podman('podman', 'Podman');
+  podman('podman', 'Podman'),
 
-  const ContainerEngine(this.executable, this.label);
+  /// WSL's own container CLI, shipped inside WSL itself from version 2.9.3
+  /// and GA in 3.0.1 (bostrot/ai-tasks#111). Nothing to install and no
+  /// daemon to start, so it is the engine a Windows machine is most likely
+  /// to have — but it only exists on Windows, which is why [windowsOnly]
+  /// gates the probe.
+  wslc('wslc', 'WSL container', cli: ContainerCli.wslc, windowsOnly: true);
+
+  const ContainerEngine(
+    this.executable,
+    this.label, {
+    this.cli = ContainerCli.docker,
+    this.windowsOnly = false,
+  });
 
   /// The binary invoked on the host, resolved through `PATH`.
   final String executable;
 
   /// Name shown to the user.
   final String label;
+
+  /// The command grammar [executable] expects.
+  final ContainerCli cli;
+
+  /// Whether the engine can only exist on a Windows host. Probing for it
+  /// anywhere else costs a process launch to learn nothing.
+  final bool windowsOnly;
 
   /// The engine stored under [executable], or null when the value is stale —
   /// an engine the user had configured and that a later build dropped.

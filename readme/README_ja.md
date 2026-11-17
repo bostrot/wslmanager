@@ -66,10 +66,10 @@
      in a debug build); a release has none of them, so the README must not
      promise them. Lift the comment together with the gate.
 
-**Docker と Podman のコンテナ**
+**Docker、Podman、WSL のコンテナ**
 - [x] マシン上のすべてのコンテナを —— 両エンジンを同時に —— インスタンスの隣に表示
-- [x] アプリを離れずにコンテナの起動、停止、再起動、削除、ログの追尾ができる
-- [x] フロントエンドに徹する: すでにある `docker`/`podman` を操作するだけで、何もインストールしない
+- [x] アプリを離れずにイメージからコンテナを作成し、起動、停止、再起動、削除、ログの追尾ができる
+- [x] フロントエンドに徹する: すでにある `docker`、`podman`、WSL 内蔵の `wslc` を操作するだけで、何もインストールしない
 - [x] AI チャットと MCP サーバーも同じコンテナツールを利用できる
 
 **Kubernetes クラスター**

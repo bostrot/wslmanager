@@ -65,10 +65,10 @@
      in a debug build); a release has none of them, so the README must not
      promise them. Lift the comment together with the gate.
 
-**Docker and Podman containers**
-- [x] See every container on the machine — both engines at once — next to your instances
-- [x] Start, stop, restart, remove and tail the logs of a container without leaving the app
-- [x] Front end only: it drives the `docker`/`podman` you already have, and installs nothing
+**Docker, Podman and WSL containers**
+- [x] See every container on the machine — every engine at once — next to your instances
+- [x] Create a container from an image, then start, stop, restart, remove and tail its logs without leaving the app
+- [x] Front end only: it drives the `docker`, `podman` or built-in `wslc` you already have, and installs nothing
 - [x] The AI chat and the MCP server get the same container tools
 
 **Kubernetes clusters**

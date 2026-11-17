@@ -8,11 +8,23 @@
 // releases, nothing to tear down when the app is uninstalled, and a container
 // started here is the same object the user's own `docker ps` shows.
 //
-// Both engines take the same subcommands, so one service drives either; the
-// engine is a value on the service rather than a subclass.
+// Docker and Podman take the same subcommands, so one service drives either;
+// the engine is a value on the service rather than a subclass. WSL's own
+// `wslc.exe` (bostrot/ai-tasks#111) joined on the same terms: it ships inside
+// WSL instead of being installed, but it is still someone else's engine
+// driven through its CLI, and it takes Docker's spellings as aliases. Where
+// it genuinely differs — a `--format` that is a vocabulary and not a template
+// language, a one-shot `stats`, a `--since` that wants an instant, and two
+// reads it does not have — the argv is built per [ContainerCli]. Every
+// difference below was checked against `wslc 3.0.1.0` on a Windows host, not
+// read off the docs: Microsoft's tutorial and reference pages contradict each
+// other, and the CLI's own help is the only thing that turned out to be right.
 
 import 'dart:async';
+import 'dart:convert' show jsonDecode;
+import 'dart:io' show Platform;
 
+import 'package:wsl2distromanager/api/containers/container_create_request.dart';
 import 'package:wsl2distromanager/api/containers/container_models.dart';
 import 'package:wsl2distromanager/api/execution/broker.dart';
 import 'package:wsl2distromanager/api/execution/models.dart';
@@ -69,11 +81,19 @@ class ContainerService {
   /// How long any single engine command may take before it is abandoned.
   final Duration timeout;
 
+  /// Whether this host is Windows. Injected rather than read from [Platform]
+  /// at every call site so the Windows-only engine can be exercised from a
+  /// test on any machine — and so the tests that predate it keep probing the
+  /// same two engines on the Windows CI job as on a Mac.
+  final bool _isWindows;
+
   ContainerService({
     Shell? shell,
     ExecutionBroker? broker,
+    bool? isWindows,
     this.timeout = const Duration(seconds: 30),
-  }) : _broker = broker ?? ExecutionBroker(shell: shell ?? ProcessShell());
+  })  : _isWindows = isWindows ?? Platform.isWindows,
+        _broker = broker ?? ExecutionBroker(shell: shell ?? ProcessShell());
 
   /// Engines found on this host, cached for the life of the service: probing
   /// costs two process launches and the answer only changes when the user
@@ -93,6 +113,11 @@ class ContainerService {
       return false;
     }
   }
+
+  /// Whether the engine commands land on a Windows host — this machine, or
+  /// the remote one when the app is driving WSL over SSH, where `wslc` is as
+  /// real as it is locally.
+  bool get _windowsHost => _isWindows || _useRemote;
 
   String get _remoteTarget {
     try {
@@ -128,14 +153,18 @@ class ContainerService {
 
   /// Every engine installed on the host, in [ContainerEngine] order.
   ///
-  /// "Installed" means the binary answered `--version`. An engine whose
+  /// "Installed" means the binary answered `--version` — which `wslc` takes
+  /// as well as its own `wslc version`. An engine whose
   /// daemon is down still shows up here — that failure belongs to [list],
-  /// which can say *why* instead of pretending nothing is installed.
+  /// which can say *why* instead of pretending nothing is installed. A
+  /// Windows-only engine is not probed at all off Windows: `wslc` cannot
+  /// exist on a Mac, and the launch would only cost a process.
   Future<List<ContainerEngine>> availableEngines() async {
     final cached = _available;
     if (cached != null) return cached;
     final found = <ContainerEngine>[];
     for (final engine in ContainerEngine.values) {
+      if (engine.windowsOnly && !_windowsHost) continue;
       final result = await _run(engine, ['--version']);
       if (result.exitCode == 0) found.add(engine);
     }
@@ -168,13 +197,14 @@ class ContainerService {
       'ps',
       if (!runningOnly) '--all',
       '--no-trunc',
-      '--format',
-      _psTemplate,
+      ..._listFormat(target),
     ]);
     if (result.exitCode != 0) {
       throw ContainerException(_failureText(target, result, 'ps'));
     }
-    return parsePsOutput(result.stdout, target);
+    return target.cli == ContainerCli.wslc
+        ? parseJsonOutput(result.stdout, target)
+        : parsePsOutput(result.stdout, target);
   }
 
   /// Containers across every installed engine. A host with both Docker and
@@ -203,6 +233,32 @@ class ContainerService {
       throw ContainerException(failures.join('\n\n'));
     }
     return containers;
+  }
+
+  /// Create and start a container from [request], on [engine] or on
+  /// [activeEngine].
+  ///
+  /// Returns the id the engine prints. The container is started detached, so
+  /// this answers as soon as the engine has accepted it rather than when the
+  /// workload inside is ready — a row that appears and immediately reads
+  /// "Exited" is an image whose command finished, not a failure here.
+  ///
+  /// The engine's own refusal is what comes back on failure: "port is already
+  /// allocated", "no such image" and "invalid reference format" are all worth
+  /// reading, and a generic "could not create container" would be worth
+  /// nothing.
+  Future<String> create(
+    ContainerCreateRequest request, {
+    ContainerEngine? engine,
+  }) async {
+    final target = engine ?? await activeEngine();
+    if (target == null) throw const ContainerException(_noEngineMessage);
+    final result = await _run(target, request.toArguments());
+    if (result.exitCode != 0) {
+      throw ContainerCreateException(
+          _failureText(target, result, 'run ${request.image}'));
+    }
+    return result.stdout.trim();
   }
 
   /// Start a stopped container.
@@ -250,7 +306,7 @@ class ContainerService {
       'logs',
       '--tail',
       '$lines',
-      if (since.isNotEmpty) '--since=$since',
+      if (since.isNotEmpty) '--since=${_sinceValue(engine, since)}',
       if (timestamps) '--timestamps',
       ref,
     ]);
@@ -287,8 +343,7 @@ class ContainerService {
   /// The engine's own JSON description of a container.
   Future<String> inspect(ContainerEngine engine, String ref) async {
     _checkRef(ref);
-    final result =
-        await _run(engine, ['inspect', ref]);
+    final result = await _run(engine, ['inspect', ref]);
     if (result.exitCode != 0) {
       throw ContainerException(_failureText(engine, result, 'inspect $ref'));
     }
@@ -308,7 +363,7 @@ class ContainerService {
   /// Images on the host, newest first the way the engines list them.
   Future<String> images(ContainerEngine engine) async {
     final result = await _run(
-        engine, ['images', '--format', _imagesTemplate]);
+        engine, ['images', ..._textFormat(engine, _imagesTemplate)]);
     if (result.exitCode != 0) {
       throw ContainerException(_failureText(engine, result, 'images'));
     }
@@ -318,8 +373,8 @@ class ContainerService {
   /// Named volumes. The answer to "where did this database's data go" when a
   /// container was recreated and the data survived — or did not.
   Future<String> volumes(ContainerEngine engine) async {
-    final result =
-        await _run(engine, ['volume', 'ls', '--format', _volumesTemplate]);
+    final result = await _run(
+        engine, ['volume', 'ls', ..._textFormat(engine, _volumesTemplate)]);
     if (result.exitCode != 0) {
       throw ContainerException(_failureText(engine, result, 'volume ls'));
     }
@@ -329,8 +384,8 @@ class ContainerService {
   /// Networks, which is how "these two containers cannot see each other" gets
   /// answered.
   Future<String> networks(ContainerEngine engine) async {
-    final result =
-        await _run(engine, ['network', 'ls', '--format', _networksTemplate]);
+    final result = await _run(
+        engine, ['network', 'ls', ..._textFormat(engine, _networksTemplate)]);
     if (result.exitCode != 0) {
       throw ContainerException(_failureText(engine, result, 'network ls'));
     }
@@ -345,9 +400,11 @@ class ContainerService {
     if (ref.isNotEmpty) _checkRef(ref);
     final result = await _run(engine, [
       'stats',
-      '--no-stream',
-      '--format',
-      _statsTemplate,
+      // Docker streams until it is told not to. `wslc` only ever takes one
+      // sample and rejects the flag outright, so sending it there would fail
+      // every call.
+      if (engine.cli == ContainerCli.docker) '--no-stream',
+      ..._textFormat(engine, _statsTemplate),
       if (ref.isNotEmpty) ref,
     ]);
     if (result.exitCode != 0) {
@@ -361,6 +418,7 @@ class ContainerService {
   /// [exec] with `ps` cannot.
   Future<String> processes(ContainerEngine engine, String ref) async {
     _checkRef(ref);
+    _requireDockerCli(engine, 'top');
     final result = await _run(engine, ['top', ref]);
     if (result.exitCode != 0) {
       throw ContainerException(_failureText(engine, result, 'top $ref'));
@@ -371,11 +429,68 @@ class ContainerService {
   /// What images, containers, volumes and the build cache are costing on
   /// disk, and how much of it is reclaimable.
   Future<String> diskUsage(ContainerEngine engine) async {
+    _requireDockerCli(engine, 'system df');
     final result = await _run(engine, ['system', 'df']);
     if (result.exitCode != 0) {
       throw ContainerException(_failureText(engine, result, 'system df'));
     }
     return result.stdout.trim();
+  }
+
+  // ---------------------------------------------------------------------
+  // Where WSL's CLI differs (bostrot/ai-tasks#111).
+  //
+  // Everything the app sends is a Docker spelling `wslc` accepts as an alias,
+  // so there is no per-engine command table — only the four differences
+  // below, each one checked against `wslc 3.0.1.0`.
+  // ---------------------------------------------------------------------
+
+  /// `--format` for the one listing the app *parses*.
+  ///
+  /// Docker is handed the template above. `wslc` has no template language —
+  /// `--format` takes `json` or `table` — so it is asked for JSON, whose keys
+  /// are English on a German Windows where every table heading is not
+  /// (`CONTAINER-ID`, `BILD`, `NAMEN`).
+  static List<String> _listFormat(ContainerEngine engine) =>
+      engine.cli == ContainerCli.wslc
+          ? const ['--format', 'json']
+          : const ['--format', _psTemplate];
+
+  /// `--format` for a read the app only passes through as text.
+  ///
+  /// There is no template to ask `wslc` for, and its own table is what the
+  /// user would see in a terminal, so the flag is simply left off.
+  static List<String> _textFormat(ContainerEngine engine, String template) =>
+      engine.cli == ContainerCli.wslc ? const [] : ['--format', template];
+
+  /// `--since` as [engine] reads it.
+  ///
+  /// Docker takes the duration the caller gave. `wslc` wants a Unix epoch or
+  /// an RFC3339 instant — and quietly reads `15m` as epoch 15, which turns
+  /// "the last fifteen minutes" into "since 1970" with no error at all, so
+  /// the duration is resolved against the clock here instead.
+  static String _sinceValue(ContainerEngine engine, String since) {
+    if (engine.cli != ContainerCli.wslc) return since;
+    final amount = int.parse(since.substring(0, since.length - 1));
+    final unit = since[since.length - 1];
+    final window = unit == 's'
+        ? Duration(seconds: amount)
+        : unit == 'm'
+            ? Duration(minutes: amount)
+            : Duration(hours: amount);
+    final from = DateTime.now().toUtc().subtract(window);
+    return '${from.millisecondsSinceEpoch ~/ 1000}';
+  }
+
+  /// Refuse a read [what] that [engine] has no command for, rather than
+  /// sending one and showing the user a usage dump in whatever language
+  /// Windows is set to. `wslc 3.0.1` has `network ls` and `volume ls`, but
+  /// neither `top` nor `system df`.
+  static void _requireDockerCli(ContainerEngine engine, String what) {
+    if (engine.cli == ContainerCli.docker) return;
+    throw ContainerException(
+        '${engine.label} has no "$what" command — only Docker and Podman '
+        'report that.');
   }
 
   Future<String> _lifecycle(
@@ -439,8 +554,9 @@ class ContainerService {
   }
 
   static const String _noEngineMessage =
-      'No container engine found. Install Docker or Podman and make sure its '
-      'command is on your PATH.';
+      'No container engine found. On Windows, WSL 2.9.3 and later ship the '
+      '"wslc" command — run "wsl --update" to get it. Otherwise install '
+      'Docker or Podman and make sure its command is on your PATH.';
 
   /// Message shown when the host has no engine at all. Public so the UI and
   /// the MCP tools say the same thing.
@@ -482,6 +598,80 @@ class ContainerService {
       ));
     }
     return containers;
+  }
+
+  /// Turn a `--format json` listing into rows.
+  ///
+  /// The output is not one JSON document: `wslc` prints one object per line,
+  /// the way Docker's own `--format json` does, so each line is decoded on
+  /// its own. A line that does not parse is skipped rather than failing the
+  /// listing — engines print notices on stdout, and one of those must not
+  /// become a container row, nor hide the rows around it. A pretty-printed
+  /// array is decoded as a whole instead, so a future engine that answers
+  /// with one still lists.
+  ///
+  /// The keys are the engine's own and are English whatever the host's
+  /// display language, which is what makes this the listing worth parsing:
+  /// `wslc`'s table headings are translated (`CONTAINER-ID`, `BILD`,
+  /// `NAMEN` on a German Windows) and its `State` values are not.
+  static List<ContainerInfo> parseJsonOutput(
+      String output, ContainerEngine engine) {
+    final trimmed = output.trim();
+    if (trimmed.startsWith('[')) {
+      final decoded = _decode(trimmed);
+      if (decoded is List) {
+        final containers = <ContainerInfo>[];
+        for (final entry in decoded) {
+          final row = _rowFrom(entry, engine);
+          if (row != null) containers.add(row);
+        }
+        return containers;
+      }
+    }
+    final containers = <ContainerInfo>[];
+    for (final line in trimmed.split('\n')) {
+      final row = _rowFrom(_decode(line.trim()), engine);
+      if (row != null) containers.add(row);
+    }
+    return containers;
+  }
+
+  /// [text] as JSON, or null when it is not JSON at all.
+  static Object? _decode(String text) {
+    if (!text.startsWith('{') && !text.startsWith('[')) return null;
+    try {
+      return jsonDecode(text);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// One decoded object as a container, or null when it carries neither an id
+  /// nor a name and so describes nothing the app can address.
+  static ContainerInfo? _rowFrom(Object? decoded, ContainerEngine engine) {
+    if (decoded is! Map) return null;
+    String field(String key) {
+      final value = decoded[key];
+      return value is String ? value.trim() : '';
+    }
+
+    final id = field('ID');
+    final name = field('Names');
+    if (id.isEmpty && name.isEmpty) return null;
+    final status = field('Status');
+    final state = field('State');
+    return ContainerInfo(
+      id: id,
+      // Docker can list several comma-separated names for one container; the
+      // first is the one its own table shows.
+      name: name.split(',').first.trim(),
+      image: field('Image'),
+      state: ContainerState.parse(
+          state.isNotEmpty ? state : status.split(' ').first),
+      status: status,
+      ports: field('Ports'),
+      engine: engine,
+    );
   }
 }
 

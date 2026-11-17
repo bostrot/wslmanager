@@ -41,7 +41,9 @@ void main() {
     final tools = buildWslMcpTools(
       backend,
       WslTerminalManager(wslApi: backend),
-      containerService: ContainerService(shell: shell),
+      // Off Windows, so the engine list is Docker and Podman whichever
+      // host runs the suite; wslc has its own tests.
+      containerService: ContainerService(shell: shell, isWindows: false),
     );
     handlers = {for (final t in tools) t.name: t.handler};
     names = tools.map((t) => t.name).toList();

@@ -195,7 +195,8 @@ void main() {
       return buildWslMcpTools(
         backend,
         WslTerminalManager(wslApi: backend),
-        containerService: ContainerService(shell: FakeContainerShell()),
+        containerService:
+            ContainerService(shell: FakeContainerShell(), isWindows: false),
       ).map((t) => t.name).toList();
     }
 

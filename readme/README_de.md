@@ -67,10 +67,10 @@
      in a debug build); a release has none of them, so the README must not
      promise them. Lift the comment together with the gate.
 
-**Docker- und Podman-Container**
+**Docker-, Podman- und WSL-Container**
 - [x] Jeder Container auf dem Rechner — beide Engines zugleich — direkt neben Ihren Instanzen
-- [x] Container starten, stoppen, neu starten, entfernen und ihre Logs verfolgen, ohne die App zu verlassen
-- [x] Nur eine Oberfläche: sie steuert das vorhandene `docker`/`podman` und installiert nichts
+- [x] Container aus einem Abbild erstellen und dann starten, stoppen, neu starten, entfernen und ihre Logs verfolgen, ohne die App zu verlassen
+- [x] Nur eine Oberfläche: sie steuert das vorhandene `docker`, `podman` oder das in WSL enthaltene `wslc` und installiert nichts
 - [x] Der KI-Chat und der MCP-Server bekommen dieselben Container-Werkzeuge
 
 **Kubernetes-Cluster**

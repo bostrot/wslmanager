@@ -66,10 +66,10 @@
      in a debug build); a release has none of them, so the README must not
      promise them. Lift the comment together with the gate.
 
-**Contêineres Docker e Podman**
+**Contêineres Docker, Podman e WSL**
 - [x] Veja todos os contêineres da máquina — os dois motores ao mesmo tempo — ao lado das suas instâncias
-- [x] Inicie, pare, reinicie, remova e acompanhe os logs de um contêiner sem sair do aplicativo
-- [x] Apenas interface: ele opera o `docker`/`podman` que você já tem e não instala nada
+- [x] Crie um contêiner a partir de uma imagem e depois inicie, pare, reinicie, remova e acompanhe os logs dele sem sair do aplicativo
+- [x] Apenas interface: ele opera o `docker`, o `podman` ou o `wslc` embutido no WSL que você já tem e não instala nada
 - [x] O chat de IA e o servidor MCP recebem as mesmas ferramentas de contêiner
 
 **Clusters Kubernetes**

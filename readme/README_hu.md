@@ -66,10 +66,10 @@
      in a debug build); a release has none of them, so the README must not
      promise them. Lift the comment together with the gate.
 
-**Docker- és Podman-konténerek**
+**Docker-, Podman- és WSL-konténerek**
 - [x] Lásd a gép összes konténerét — mindkét motort egyszerre — a példányaid mellett
-- [x] Indítsd, állítsd le, indítsd újra, távolítsd el a konténereket és kövesd a naplóikat anélkül, hogy elhagynád az alkalmazást
-- [x] Csak felület: a már meglévő `docker`/`podman` parancsodat vezérli, és semmit nem telepít
+- [x] Hozz létre konténert egy lemezképből, majd indítsd, állítsd le, indítsd újra, távolítsd el és kövesd a naplóikat anélkül, hogy elhagynád az alkalmazást
+- [x] Csak felület: a már meglévő `docker`, `podman` vagy a WSL-be épített `wslc` parancsodat vezérli, és semmit nem telepít
 - [x] Az MI-csevegés és az MCP-kiszolgáló ugyanazokat a konténereszközöket kapja
 
 **Kubernetes-fürtök**
