@@ -17,7 +17,7 @@ import 'package:wsl2distromanager/components/constants.dart';
 import 'package:wsl2distromanager/components/helpers.dart';
 import 'package:wsl2distromanager/components/named_button.dart';
 import 'package:wsl2distromanager/components/notify.dart';
-import 'package:wsl2distromanager/dialogs/rating_dialog.dart';
+import 'package:wsl2distromanager/api/rating_prompt.dart';
 import 'package:wsl2distromanager/components/ai_diagnosis.dart';
 import 'package:wsl2distromanager/components/error_view.dart';
 import 'package:wsl2distromanager/components/form_card.dart';
@@ -103,6 +103,7 @@ bool _failCreate(
   bool diagnosable = true,
   String details = '',
 }) {
+  recordFailedAction();
   if (onError == null) {
     Notify.message(details.isEmpty ? message : '$message $details'.trim(),
         severity: InfoBarSeverity.error);
@@ -502,7 +503,7 @@ Future<bool> createInstance(
       prefs.setString('DistroName_$name', label);
       // Save distro path
       prefs.setString('Path_$name', effectiveLocation);
-      recordInstanceCreated();
+      recordSuccessfulAction();
       return true;
     } finally {
       if (cloudInit != null && !keepUserData) {

@@ -5,6 +5,7 @@ import 'package:fluent_ui/fluent_ui.dart' hide Page;
 import 'package:flutter/gestures.dart';
 import 'package:localization/localization.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:wsl2distromanager/api/ai_service.dart';
 import 'package:wsl2distromanager/api/app.dart';
 import 'package:wsl2distromanager/api/updater.dart';
 import 'package:wsl2distromanager/components/constants.dart';
@@ -14,7 +15,7 @@ import 'package:wsl2distromanager/components/notify.dart';
 import 'package:wsl2distromanager/dialogs/ai_consent_dialog.dart';
 import 'package:wsl2distromanager/dialogs/changelog_dialog.dart';
 import 'package:wsl2distromanager/dialogs/firststart_dialog.dart';
-import 'package:wsl2distromanager/dialogs/rating_dialog.dart';
+import 'package:wsl2distromanager/api/rating_prompt.dart';
 import 'package:wsl2distromanager/dialogs/update_dialog.dart';
 import 'package:wsl2distromanager/theme.dart';
 
@@ -33,6 +34,7 @@ initRoot(NotifyMessage statusMsg) async {
   // that evidence.
   String? version = prefs.getString('version');
   String? lastChangelogVersion = prefs.getString('LastChangelogVersion');
+  recordAppLaunch();
 
   // Seed the theme from the system only on a first run. The setter persists,
   // so doing this unconditionally overwrote the user's saved choice on every
@@ -77,21 +79,18 @@ initRoot(NotifyMessage statusMsg) async {
 
   // The prompts a start can raise, one after another rather than on top of
   // each other: the release that introduces the AI question is the one where
-  // every existing install answers it, and a Store user with a few instances
-  // behind them is due the rating prompt on the same start.
+  // every existing install answers it. The rating sheet never shares a start
+  // with any of them.
   Future<void> startupPrompts() async {
+    final consentDue = !AiService.featuresDecided;
     // Whether this install wants anything AI at all, asked once and never
     // again (bostrot/ai-tasks#98), and behind the greeting that a first run
     // or an upgrade puts up first.
     await maybeAskAiConsent(after: greeting);
-    // And again for the rating prompt: an install that answered the AI
-    // question long ago skips straight past the line above, so on an upgrade
-    // it would otherwise land on the release notes. `await` on a null future
-    // is a no-op, which is the ordinary start.
-    await greeting;
     // Asked on a later start rather than right after a creation, so the
-    // prompt never lands on top of the dialog the user just closed.
-    await maybeShowRatingPrompt();
+    // sheet never lands on top of the dialog the user just closed.
+    await maybeRequestStoreRating(
+        otherPromptShown: greeting != null || consentDue);
   }
 
   // Not awaited: a user who leaves a prompt open still gets the update check
