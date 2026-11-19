@@ -22,6 +22,25 @@ Search terms and wording can win the long-tail queries ("wsl gui", "wsl2",
 "linux distro manager"). Only more Store installs and more recent ratings will
 move "wsl" itself.
 
+**What Partner Center adds (§2b, read 2026-11-19).**
+
+- **Going free worked for conversion, not for discovery.** Installs rose
+  14-fold (11 → 154 a week) and page-view-to-install conversion rose from
+  0.3 % to 8.2 %. Page views, however, stayed where they were in the paid
+  summer (about 1.5–1.9 K a week). That is a third of the Dec–Apr level, so
+  the Store is showing the page less, not more.
+- **Ratings have stopped.** The app has 121 lifetime ratings (average 4.60).
+  Since 2026-09-13, about 1,300 installs produced exactly **two** ratings,
+  averaging 2.5. The in-app prompt added on 2026-08-27 produces practically
+  nothing.
+- **China is the biggest market**: 37 % of installs in the last month, ahead
+  of the US (17 %) and Germany (13 %). zh-CN runs the oldest, shortest listing
+  and has English keywords.
+- **Keywords exist but are wasted.** en-US has `wsl, manager, gui, linux,
+  wsl2, docker, virtual disk compact`. de-DE and zh-CN carry the same English
+  set with `github` in place of the last one. The other nine listing languages
+  have **no keywords at all**.
+
 ---
 
 ## 1. What the Store returns today
@@ -148,10 +167,130 @@ Store served):
   Store herunter! 🚀"). It lists features from before 2.0 and misses moving
   distros, compacting, remote WSL, templates and the MCP server. It has half
   the screenshots. zh-CN has the same problem.
-- **Search terms (keywords): unknown.** They are hidden from customers and
-  are not in the PDP payload. Nothing in the repos records them. They live
-  only in Partner Center, or in the submission JSON under
-  `listings.<lang>.baseListing.keywords`. **Check them before acting on §5.**
+- **Search terms (keywords):** hidden from customers and absent from the PDP
+  payload; nothing in the repos records them. They are read from Partner
+  Center below.
+
+### The listing in Partner Center (live submission 83, read-only view)
+
+Partner Center shows 12 listing languages: zh-CN, zh-TW, en-AU, en-GB, en-US,
+de-DE, hu-HU, ja-JP, pt-BR, pt-PT, es-ES and tr-TR. There is **no ko-KR
+listing** even though the MSIX declares ko-KR, so Korea gets the English
+fallback. The product name is `WSL Manager` in every language.
+
+| Language | Keywords (as set) | Short description | Description | Release notes |
+|---|---|---|---|---|
+| en-US | `wsl`, `manager`, `gui`, `linux`, `wsl2`, `docker`, `virtual disk compact` | 2026 pitch ("does what the free ones don't") | 2,157 chars, current | "WSL Manager 2.0 …" |
+| de-DE | `wsl`, `manager`, `gui`, `linux`, `wsl2`, `docker`, `github` (English) | **old** ("die ultimative Windows Store App") | 1,511 chars, **old**, emoji | "WSL Manager 2.0 …" (German) |
+| zh-CN | same English set as de-DE | **old** ("终极的Windows Store应用程序 😍") | **528 chars, old** | "WSL Manager 2.0 …" (Chinese) |
+| zh-TW, ja-JP, es-ES, pt-BR, pt-PT, tr-TR, hu-HU | **none** | 2026 pitch, translated | current, translated | "WSL Manager 2.0 …" |
+| en-GB, en-AU | **none** | 2026 pitch | current | "WSL Manager 2.0 …" |
+
+All 12 have 11 feature bullets. Other fields:
+
+- **Copyright:** "©2023 Copyright Eric Trenkel" (en-US, de-DE and zh-CN only).
+- **Developed by:** "Bostrot (Eric Trenkel)".
+- **en-US voice title:** "Windows-Subsystem-for-Linux Graphical Interface".
+  The other languages have no voice title.
+- **Release notes in every language** still describe 2.0, while the shipped
+  version is 2.6.
+- **Screenshots:** the public PDP counts in the table above (8 for en-US, 4 for
+  de-DE and zh-CN, 1 elsewhere). The read-only view did not expose its own
+  count.
+
+## 2b. Partner Center analytics (52 weeks to 2026-11-17)
+
+These are Store-only numbers: GitHub, winget and Scoop installs are not in
+them. Partner Center flagged "data disruptions on Channel and Conversions"
+while this was read, so treat the last two weeks with care.
+
+### Acquisitions: paid vs free
+
+| Period | Weeks | Page views / week | Installs / week | Conversion (installs / page views) |
+|---|---|---|---|---|
+| Paid, 2025-11-17 → 2026-04-27 | 24 | ≈ 5,000 (peak 8,302 in the week of 2026-03-09) | ≈ 15 | 0.3 % |
+| Paid, 2026-05-25 → 2026-08-31 | 15 | ≈ 1,500 | ≈ 5 | 0.3 % |
+| **Free, 2026-09-14 → 2026-11-02** | 8 | **1,885** | **154** | **8.2 %** |
+| Free, week of 2026-11-09 | 1 | 10,939 | 166 | 1.5 % |
+
+- **12-month totals:** 1,885 installs. The last month alone had 20 K page views,
+  610 installs, 3.0 % conversion and a 99.2 % install success rate.
+- **During the paid period**, 20–37 people a week clicked Buy and then
+  aborted ("user-initiated aborts"). After the flip that fell to 0–6.
+- **Page views fell by about two thirds from late May 2026, on both the Store
+  and Bing at once,** and did not come back when the app went free. There was
+  no release between v1.11.0 (2026-04-03) and v2.0.0 (2026-09-06), so loss of
+  freshness is one candidate. The frequent releases since September have not
+  restored the old level, though, so it is not the whole story.
+- **The week of 2026-11-09:** page views from inside the Store jumped to 10.6 K
+  but Store-sourced installs stayed at about 80. That looks like low-intent
+  exposure (a placement or collection), or it is the reporting disruption.
+  It did not translate into installs.
+
+### Where page views and installs come from (free period, weekly averages)
+
+| Source | Page views / week | Installs / week | Conversion |
+|---|---|---|---|
+| Microsoft Store on Windows (search and browse inside the Store app) | 1,792 (95 %) | 88.5 (58 %) | 4.9 % |
+| External web URL (website, README, GitHub links) | 67 | 60.2 (39 %) | **90 %** |
+| Custom campaign | ≈ 12 | ≈ 4 | – |
+| Bing web search | ≈ 4 (≈ 50/week until May) | ≈ 1 | – |
+| Microsoft Store web, Windows Start, App restore | 0 | 0 | – |
+
+Partner Center splits page views by **source type only**. It does not report
+which Store search terms led to the page, so the share that came from
+searching "wsl" specifically cannot be measured.
+
+### Markets (installs)
+
+| Market | Last 12 months | Last month (2026-10-20 → 11-17) |
+|---|---|---|
+| China | 591 (31 %) | 224 (37 %) |
+| United States | 386 (20 %) | 102 (17 %) |
+| Germany | 219 (12 %) | 80 (13 %) |
+| Brazil | 63 (3 %) | – |
+| United Kingdom | 48 (3 %) | 14 (2 %) |
+| France | 44 (2 %) | 13 (2 %) |
+| Russia | – | 11 (2 %) |
+| India | 37 (2 %) | 10 (2 %) |
+
+Per-market page views and conversion were not read; the market filter would
+need one pass per country.
+
+### Ratings and reviews
+
+- **Lifetime:** 121 ratings, average **4.60**. By star: 5★ 101 (83 %), 4★ 9,
+  3★ 2, 2★ 0, 1★ 9. 84 are original and 37 revised.
+- **Over time:** 1–4 ratings a week through 2022–2023, then down to roughly
+  one a month through 2024. In the year before going free there were 4 (in
+  February, March, June and October 2025). Nothing from 2025-10-20 until the
+  week of 2026-09-14, which brought **2 ratings at an average of 2.5**.
+  Nothing since.
+- **Newest written reviews**, paraphrased and anonymised:
+  - "Started installing AI stuff that has nothing to do with WSL management,
+    uninstalled." (1 star)
+  - "The AI assistant installs without confirmation; it should be an option;
+    otherwise a great app."
+  - "Not intuitive, not nice to look at." (Chinese)
+  - "Crashes when creating an instance, with no error shown."
+  - "Blank screen and image search failures until the cache folder was
+    deleted."
+  - Older ones: "Best WSL tool", "Best software for managing WSL distros in a
+    GUI — why is it not on the first page of the Windows Store?"
+  - Every one of the critical reviews has a developer reply.
+- **Partner Center's AI review summary:** "does not have enough reviews to
+  generate a review summary".
+
+### Usage and health (opt-in telemetry, last 30 days)
+
+- **Devices:** 257 monthly active, of which 185 are new that month. 13 daily
+  active (DAD/MAD 5.2 %).
+- **Sessions:** 658 sessions, averaging 1.7 minutes.
+- **Health:** a handful of crashes, hangs and memory failures in 30 days.
+  Nothing systemic.
+
+Most users open the app a few times and leave. A prompt that needs **three
+created instances and a later launch** rarely meets anyone.
 
 ### Where the listing text lives and how it is submitted
 
@@ -245,54 +384,75 @@ inputs for Store search. The results in §1, where Calculator, Teams and
 Windows App rank for "wsl", only make sense if popularity is a heavy input.
 Treat that as an inference, not documentation.
 
-## 4. Root causes, most likely first
+## 4. Root causes, ranked again with the Partner Center data
 
-1. **Too little Store install volume and too few recent ratings for a head
-   term ranked mostly by popularity.** The app was paid until 2026-09-13, so
-   most Windows users installed it from GitHub, winget (the Inno installer,
-   `Bostrot.WSLManager`) or Scoop. None of those count toward the Store. The
-   Store has 23 US and 12 DE ratings after five years. WSL UI got 60 US
-   ratings in ten months by being free in the Store from day one.
-2. **The rating prompt converts poorly and fires late.** It leaves the app for
-   the Store's review page instead of showing the native in-app sheet. It
-   waits for three *created* instances, which many users never reach because
-   they create one or two distros. It only runs on Store installs, which are
-   the small group per cause 1.
-3. **The localized listings are stale or thin, which is the DE-specific
-   cause.** The German listing (also served in AT and CH) is the old emoji copy
-   with 4 screenshots and pre-2.0 features. en-GB, en-AU, es, pt, ja, zh-TW, tr
-   and hu have a single screenshot each. Thin listings convert worse from the
-   results page, and conversion is a plausible popularity input.
-4. **The en-US text targets people who already use a WSL front end, not
-   people searching.** It never says "Windows Subsystem for Linux", "GUI" only
-   once, "Linux" once, and it opens with a comparison ("does what the free ones
-   don't") that no longer fits a free listing. That is why "wsl gui" is #15 and
-   "wsl2" is outside the top 20 in the US while WSL UI is #1 for both. This
-   affects long-tail queries more than "wsl".
-5. **The keywords are probably unset or wasted on "wsl", which the title
-   already covers.** This is unverified; check Partner Center.
-6. **wsl-bridge holds #1 for reasons we cannot see.** It does not explain our
-   rank, but it takes one of the top three slots for "wsl".
+Earlier (public data only) the order was: 1 popularity and volume, 2 the
+rating prompt, 3 stale de-DE/zh-CN listings, 4 en-US wording, 5 keywords. The
+verdicts below are based on §2b.
 
-The product name is **not** a root cause. "WSL Manager" already starts with
-the query term, and the Store matches it (#1 for "wsl manager").
+1. **Low discovery, which the Store controls through popularity signals —
+   CONFIRMED, and narrowed.** Going free fixed conversion (0.3 % → 8.2 %) but
+   did not bring discovery back. In-Store page views have been about a third
+   of the winter level since late May 2026, and they did not rise with the
+   14-fold jump in installs. 95 % of page views and 58 % of installs come from
+   inside the Store app. That surface is where the "wsl" rank is decided, and
+   it is the one that shrank.
+2. **No new ratings — CONFIRMED, and stronger than assumed.** About 1,300
+   free installs produced 2 ratings, about 1.5 per 1,000 installs. Both
+   arrived in the first week and averaged 2.5. Before that, nothing for 11
+   months. The Store weights recent ratings
+   ([§3.6](#3-what-microsoft-documents-about-discoverability)), and recent
+   ratings are both nearly absent and negative. The in-app prompt is
+   effectively dead. The usage data shows why: 185 of 257 monthly devices are
+   new, so most people never reach "three created instances, then a later
+   launch". When they do, they are sent out of the app to the Store.
+3. **The listings in the biggest markets are stale — CONFIRMED, and China
+   matters more than Germany.** China is 37 % of installs and has the oldest
+   listing: a 528-character emoji description from before 2.0, 4 screenshots,
+   and English keywords. Germany (13 %) has the same problem with a longer
+   old text. All 12 languages still announce "WSL Manager 2.0" in their
+   release notes.
+4. **Keywords are wasted or missing — CONFIRMED, though not "unset" as
+   guessed.** In en-US, two of the seven slots repeat the title (`wsl`,
+   `manager`), one is a third-party brand (`docker`), and one is generic
+   (`linux`). de-DE and zh-CN reuse the English set and spend one slot on
+   `github`, another brand. Nine languages, together a small share of
+   installs, have none.
+5. **The en-US wording speaks to people who already use a WSL front end —
+   NOT MEASURABLE.** Partner Center does not report which search terms
+   reached the page, so this stays a hypothesis backed only by the public
+   long-tail ranks in §1. It drops to last place.
+6. **New: the AI features cost goodwill.** The two newest critical reviews
+   say the AI assistant installed things without asking. That is the most
+   recent sentiment the Store weights, and it sits on a listing whose
+   description leads with the AI and MCP features.
+7. **wsl-bridge at #1 still has no explanation.** It is not something we can
+   change.
 
-## 5. Recommended actions, ranked
+The product name is still **not** a root cause.
+
+## 5. Recommended actions, ranked again
 
 Impact: high / medium / low on the "wsl" head term. Effort: S (< 1 h),
-M (a day), L (more). All are low-risk; none renames the app.
+M (a day), L (more). All are low-risk; none renames the app. Each one has a
+target that can be read off the same Partner Center pages afterwards.
 
-| # | Action | Impact | Effort | Evidence |
-|---|---|---|---|---|
-| 1 | **Switch the rating prompt to `RequestRateAndReviewAppAsync` and ask earlier** (after the first successful create or the second launch, at least 3 days in, at most once per version and 90 days; keep "never") | High (ratings count, recency) | M | §2 prompt, §3.6, §3.7, cause 2 |
-| 2 | **Send Windows installs to the Store first**: put Store first in README, the website and release notes ("Free on the Microsoft Store"); add `winget install 9NWS9K95NMJB` (msstore source) next to the community manifest; give Store links a `cid` for acquisition tracking | High (install velocity) | S–M | cause 1, Store going free on 2026-09-13 |
-| 3 | **Rewrite the de-DE listing and add the 8 screenshots to every locale** (text in §6), and refresh zh-CN the same way | Medium–high (DE) | M | §2 table, cause 3 |
-| 4 | **Set the 7 keywords per locale** (§6), using terms not already in the name | Medium (long tail), low–medium (head) | S | §3.1–3.2, cause 5 |
-| 5 | **Reword the en-US short description and first paragraph** to say "Windows Subsystem for Linux", "GUI" and "distro manager" up front (§6) | Medium (long tail) | S | §1 "wsl gui"/"wsl2" ranks, §3.4, cause 4 |
-| 6 | **Reply to every Store review in Partner Center**, especially the low ones in the US (4.3 vs 4.6 in DE) | Low–medium | S, ongoing | §3.6 |
-| 7 | **Keep the listing in git** like pricing: `store/listing/<locale>.json` merged into `listings.<locale>.baseListing` by `publish_store.sh`, with a dry-run diff. That stops locales drifting again | Enabler | M | §2 "where it lives" |
-| 8 | **Optional: a small Microsoft Store Ads campaign on "wsl" in DE and US** for a few weeks after 1–5. It is the only guaranteed top slot, and the installs it brings feed the organic signal | Medium, paid | S + budget | §3.8 |
-| 9 | **Do not rename** (see below) | – | – | §3.3, §3.9 |
+| # | Action | Impact | Effort | Measurable target | Evidence |
+|---|---|---|---|---|---|
+| 1 | **Replace the rating prompt with `RequestRateAndReviewAppAsync` and ask much earlier**: on the second launch, at least 2 days after install, once one action has succeeded (create, start or open a terminal); at most once per version and every 90 days | High | M | **≥ 15 ratings a month** (≈ 2.5 % of ~600 monthly installs) within 6 weeks of release; average of ratings in the last 90 days **≥ 4.5** | §2b ratings, usage; cause 2 |
+| 2 | **Rewrite the zh-CN and de-DE listings** (text in §6), set **localized** keywords in both, and use the 8 current screenshots | High in CN, medium in DE | M | China and Germany Store-source conversion within 3 weeks; DE "wsl" rank ≤ 5 by the end of Q1 2027 | §2 Partner Center table; §2b markets; cause 3 |
+| 3 | **Replace the keywords in all 12 languages** (§6): drop `wsl`, `manager`, `docker` and `github`; fill the nine empty languages | Medium (long tail), low–medium (head) | S | Rank for "wsl gui" (US ≤ 5) and "wsl2" (US ≤ 10), re-checked with the §1 queries 4 weeks after the change | §2 table; §3.1–3.2; cause 4 |
+| 4 | **Push external traffic into the Store**: Store as the first Windows option in the README, the website and GitHub release notes, with a `cid` on every link (`?cid=readme`, `?cid=site`, `?cid=release`); add `winget install 9NWS9K95NMJB`. External visits convert at 90 %, and more Store installs feed the popularity signal that decides "wsl" | Medium–high | S–M | External-URL installs from **60 to ≥ 120 a week**; total Store installs **≥ 250 a week** | §2b sources |
+| 5 | **Make the AI features visibly opt-in, and say so in the listing**: one line in every description ("AI features are off until you turn them on"); update the release notes from "2.0" to the current version | Medium (rating quality) | S | No new review that complains about AI installs; 1★ share among ratings in the last 90 days **< 10 %** | §2b reviews; cause 6 |
+| 6 | **Find out why page views dropped in late May 2026**: compare the submission history and the keyword and listing edits of April–June 2026 in Partner Center, and keep releasing at least monthly | Unknown, possibly high | S | Store-on-Windows page views back to **≥ 4,000 a week** (the Dec–Apr level was ~5,000) | §2b paid vs free |
+| 7 | **Reword the en-US short description and first paragraph** (§6) | Low–medium | S | as #3 | cause 5 |
+| 8 | **Keep the listing in git** like pricing: `store/listing/<locale>.json` merged by `publish_store.sh`, with a dry-run diff. That would have stopped zh-CN and de-DE drifting for three years | Enabler | M | – | §2 |
+| 9 | **Optional: Microsoft Store Ads on "wsl" in CN, US and DE** after 1–4 are live | Medium, paid | S + budget | Campaign conversion in "Custom campaign performance" | §3.8 |
+| 10 | **Do not rename** | – | – | – | §3.3, §3.9 |
+
+To track: Insights → Acquisitions (Last 3 months; view by source type
+"Microsoft Store on Windows" and "External web url"; Geographical spread) and
+Insights → Reviews (Ratings over time). Re-run the §1 queries the same day.
 
 What not to do: anything that inflates ratings. Incentivised reviews violate
 Store policy and the developer code of conduct
@@ -319,6 +479,19 @@ The name could be "WSL Manager – GUI for Windows Subsystem for Linux" or
 
 ### Keywords
 
+Current keywords (§2): en-US `wsl, manager, gui, linux, wsl2, docker, virtual
+disk compact`; de-DE and zh-CN the same English set with `github` last; nine
+languages have none. What changes:
+
+- **Drop** `wsl` and `manager`: the title already covers both.
+- **Drop** `docker` and `github`: they are other companies' brands and fall
+  under policy 10.1.3.
+- **Make** `gui`, `linux` and `wsl2` part of longer phrases.
+- **Localize** the de-DE and zh-CN sets.
+- **Copy** the en-US set into en-GB and en-AU. For the other languages, use
+  the en-US set until someone translates it; English technical terms are
+  still searched there.
+
 All terms are ≤ 30 characters, 7 terms, ≤ 21 words. None repeats "wsl"
 alone, since the title covers it. No pricing words and no third-party brand
 names.
@@ -344,6 +517,20 @@ Avoid "Ubuntu", "Debian", "Kali" and "Docker" as keywords: they are other
 publishers' product titles. They can stay in the description where they are
 factual.
 
+zh-CN (China is 37 % of installs). The keywords use Microsoft's own Chinese
+name for WSL, 适用于 Linux 的 Windows 子系统, shortened where a keyword
+needs it:
+
+| # | zh-CN | meaning |
+|---|---|---|
+| 1 | WSL 图形界面 | WSL GUI |
+| 2 | WSL 管理器 | WSL manager (Chinese users search the Chinese word) |
+| 3 | Linux 子系统 | Linux subsystem |
+| 4 | WSL2 发行版管理 | WSL2 distro management |
+| 5 | Linux 发行版 | Linux distro |
+| 6 | WSL 备份 导出 导入 | WSL backup export import |
+| 7 | wslconfig 编辑器 | wslconfig editor |
+
 ### Short description
 
 en-US (219 chars):
@@ -353,6 +540,26 @@ en-US (219 chars):
 de-DE (260 chars):
 
 > WSL-Distributionen (Windows-Subsystem für Linux) in einer GUI verwalten: installieren, sichern, auf ein anderes Laufwerk verschieben, virtuelle Datenträger verkleinern, Docker-Images als Distribution nutzen und .wslconfig bearbeiten. Open Source und kostenlos.
+
+zh-CN:
+
+> 用一个图形界面管理 WSL（适用于 Linux 的 Windows 子系统）发行版：安装、备份、迁移到其他磁盘、压缩虚拟磁盘以释放空间、把任意 Docker 镜像变成发行版、编辑 .wslconfig。开源，免费使用。
+
+The zh-CN description and features should be a translation of the current
+en-US text, the way zh-TW already is. The zh-TW listing can serve as the
+starting point, converted to Simplified Chinese and checked by a native
+reader. That replaces today's 528-character text from before 2.0.
+
+### Every language: one line on the AI features, and current release notes
+
+Add to the end of the first paragraph of every description (en-US wording):
+
+> The AI features are optional and stay off until you turn them on.
+
+Check that this is true in the shipped build before publishing it: the two
+newest critical reviews say otherwise for earlier builds. Then replace the
+"WSL Manager 2.0" release notes in all 12 languages with the current
+version's.
 
 ### en-US description (first paragraph only; the rest of today's text stays)
 
@@ -458,17 +665,30 @@ terminal open). The Store sheet already has its own decline, so the app's
 
 ## 7. Not verified
 
-- **Current keywords in Partner Center.** I had no Partner Center access by
-  design. Read them there or from the submission JSON before changing them.
-- **Install and acquisition numbers and search click-through.** Partner Center
-  → Acquisitions would confirm or refute cause 1 (Store acquisitions before
-  and after 2026-09-13).
+Closed by Partner Center: the current keywords (§2), the acquisition numbers
+before and after going free, the sources of page views and installs, the
+markets, and the ratings over time (§2b).
+
+Still open:
+
+- **Which search terms led to the page.** Partner Center reports source
+  types only ("Microsoft Store on Windows", "External web url", …), not
+  queries. The share of installs that came from searching "wsl" cannot be
+  measured.
+- **Why page views fell by two thirds in late May 2026** on the Store and
+  Bing at the same time (action 6).
+- **What caused the 10.6 K page-view spike in the week of 2026-11-09**: a
+  placement, or the "Channel and Conversions" data disruption Partner Center
+  was reporting.
+- **Per-market page views and conversion.** Only installs per market were
+  read.
+- **Screenshot count per language inside Partner Center.** The public PDP
+  counts in §2 are used instead.
 - **Why wsl-bridge ranks #1** with no ratings.
 - **Whether "WSL" alone is a registered Microsoft trademark.**
 - **Whether the Windows Store client ranks the same as the anonymous web/API
-  results.** The web page matched the API for de-DE. The Store client may
-  personalise its results.
-- **Whether keyword changes take effect without a new package.** Listing-only
-  submissions are allowed. How long re-indexing takes is not documented.
-- **Rank changes over time.** This is a single snapshot taken 2026-11-19.
-  Re-run the queries in §1 a few weeks after acting to measure the effect.
+  results.** The web page matched the API for de-DE.
+- **How long re-indexing takes after a listing-only submission.** Microsoft
+  does not document it.
+- **Rank changes over time.** The ranks are a single snapshot from
+  2026-11-19. Re-run the §1 queries after acting.
