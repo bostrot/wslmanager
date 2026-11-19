@@ -20,15 +20,20 @@
 // local is left to prove the purchase.
 //
 // The API is WinRT and only works with package identity, so this lives in
-// the runner rather than in Dart. One method, `getAcquisition`, no
-// arguments, answering a map:
+// the runner rather than in Dart. `getAcquisition`, no arguments, answers a
+// map:
 //
 //   acquiredAt  ISO-8601 UTC instant, or null when unknown
 //   error       null, or a short reason nothing could be found
 //
+// `requestRateAndReview`, no arguments, shows the Store's own rating sheet
+// (StoreContext.RequestRateAndReviewAppAsync) and answers once the user
+// closes it: `status` is "succeeded", "canceled", "networkError" or "error",
+// with `error` as above.
+//
 // Never throws at the Dart side: an unpackaged process, a sideloaded
 // package, a user who is not signed in to the Store, an old Windows — all
-// come back as an answer with `error` set and `acquiredAt` null.
+// come back as an answer with `error` set.
 class StoreChannel {
  public:
   // Matches `StoreAcquisitionProbe.channelName` on the Dart side.
@@ -44,7 +49,7 @@ class StoreChannel {
   StoreChannel(flutter::BinaryMessenger* messenger, HWND window);
   ~StoreChannel();
 
-  // Handles |kAnswerMessage|: |lparam| carries the finished lookup. Returns
+  // Handles |kAnswerMessage|: |lparam| carries the finished call. Returns
   // true when the message was one of ours.
   bool OnAnswerMessage(LPARAM lparam);
 

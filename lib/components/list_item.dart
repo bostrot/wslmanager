@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:localization/localization.dart';
 import 'package:wsl2distromanager/api/apple/apple_vm_api.dart';
 import 'package:wsl2distromanager/api/quick_actions.dart';
+import 'package:wsl2distromanager/api/rating_prompt.dart';
 import 'package:wsl2distromanager/dialogs/snippet_env_dialog.dart';
 import 'package:wsl2distromanager/api/templates.dart';
 import 'package:wsl2distromanager/api/vm/vm_backend.dart';
@@ -431,7 +432,9 @@ class _ListItemState extends State<ListItem> {
       Notify.message('${widget.item} ${'started-text'.i18n()}.',
           severity: InfoBarSeverity.success,
           duration: const Duration(seconds: 3));
+      recordSuccessfulAction();
     } catch (e) {
+      recordFailedAction();
       final failure = WslFailure.from(e);
       Notify.message(
           '${'startfailed-text'.i18n([distroLabel(widget.item)])} ${failure.shortReason}'.trim(),
