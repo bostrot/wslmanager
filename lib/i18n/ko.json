@@ -1385,5 +1385,8 @@
   "sale-banner-button": "혜택 보기",
   "sale-applied-text": "%s0: %s1 할인, 결제 시 적용됩니다.",
   "vmconsolelogtooltip-text": "콘솔 로그 보기",
-  "vmnoconsolelog-text": "이 VM은 아직 콘솔에 아무것도 출력하지 않았습니다."
+  "vmnoconsolelog-text": "이 VM은 아직 콘솔에 아무것도 출력하지 않았습니다.",
+  "filterinstances-text": "이름으로 인스턴스 필터링",
+  "filternomatch-text": "'%s'이(가) 포함된 인스턴스 이름이 없습니다.",
+  "clearfilter-text": "필터 지우기"
 }

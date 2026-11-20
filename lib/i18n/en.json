@@ -1385,5 +1385,8 @@
   "sale-banner-button": "See the offer",
   "sale-applied-text": "%s0: %s1 off, applied at checkout.",
   "vmconsolelogtooltip-text": "View console log",
-  "vmnoconsolelog-text": "This VM has not written anything to its console yet."
+  "vmnoconsolelog-text": "This VM has not written anything to its console yet.",
+  "filterinstances-text": "Filter instances by name",
+  "filternomatch-text": "No instance name contains \"%s\".",
+  "clearfilter-text": "Clear filter"
 }

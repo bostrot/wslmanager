@@ -1385,5 +1385,8 @@
   "sale-banner-button": "Az ajánlat megtekintése",
   "sale-applied-text": "%s0: %s1 kedvezmény, a fizetésnél már levonva.",
   "vmconsolelogtooltip-text": "Konzolnapló megtekintése",
-  "vmnoconsolelog-text": "Ez a VM még semmit nem írt a konzoljára."
+  "vmnoconsolelog-text": "Ez a VM még semmit nem írt a konzoljára.",
+  "filterinstances-text": "Példányok szűrése név szerint",
+  "filternomatch-text": "Egyik példány neve sem tartalmazza ezt: „%s”.",
+  "clearfilter-text": "Szűrő törlése"
 }

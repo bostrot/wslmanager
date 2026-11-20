@@ -1386,5 +1386,8 @@
   "sale-banner-button": "查看優惠",
   "sale-applied-text": "%s0：折抵 %s1，結帳時自動套用。",
   "vmconsolelogtooltip-text": "檢視主控台記錄",
-  "vmnoconsolelog-text": "此虛擬機器尚未向主控台輸出任何內容。"
+  "vmnoconsolelog-text": "此虛擬機器尚未向主控台輸出任何內容。",
+  "filterinstances-text": "依名稱篩選執行個體",
+  "filternomatch-text": "沒有執行個體名稱包含「%s」。",
+  "clearfilter-text": "清除篩選"
 }

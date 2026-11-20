@@ -1385,5 +1385,8 @@
   "sale-banner-button": "セールを見る",
   "sale-applied-text": "%s0: %s1 オフ。決済画面で適用されます。",
   "vmconsolelogtooltip-text": "コンソールログを表示",
-  "vmnoconsolelog-text": "このVMはまだコンソールに何も出力していません。"
+  "vmnoconsolelog-text": "このVMはまだコンソールに何も出力していません。",
+  "filterinstances-text": "名前でインスタンスを絞り込む",
+  "filternomatch-text": "「%s」を含むインスタンス名はありません。",
+  "clearfilter-text": "フィルターをクリア"
 }
