@@ -1386,5 +1386,8 @@
   "sale-banner-button": "Zum Angebot",
   "sale-applied-text": "%s0: %s1 Rabatt, an der Kasse bereits abgezogen.",
   "vmconsolelogtooltip-text": "Konsolenprotokoll anzeigen",
-  "vmnoconsolelog-text": "Diese VM hat noch nichts auf ihre Konsole geschrieben."
+  "vmnoconsolelog-text": "Diese VM hat noch nichts auf ihre Konsole geschrieben.",
+  "filterinstances-text": "Instanzen nach Namen filtern",
+  "filternomatch-text": "Kein Instanzname enthält „%s“.",
+  "clearfilter-text": "Filter zurücksetzen"
 }

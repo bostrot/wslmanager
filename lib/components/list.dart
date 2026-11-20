@@ -5,8 +5,10 @@ import 'package:wsl2distromanager/api/vm/vm_backend.dart';
 import 'package:wsl2distromanager/api/recipes/recipe_service.dart';
 import 'package:wsl2distromanager/api/wsl_errors.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:wsl2distromanager/components/ai_diagnosis.dart';
 import 'package:wsl2distromanager/components/error_view.dart';
+import 'package:wsl2distromanager/components/named_button.dart';
 import 'package:wsl2distromanager/components/notify.dart';
 import 'package:wsl2distromanager/dialogs/dialogs.dart';
 import 'package:wsl2distromanager/nav/router.dart';
@@ -22,6 +24,18 @@ class DistroList extends StatefulWidget {
 
   @override
   DistroListState createState() => DistroListState();
+}
+
+/// From this many instances on, the list gets a name filter. Below it every
+/// row is already on screen and the box would only push them down.
+const kInstanceFilterThreshold = 6;
+
+/// The instances whose name contains [query], ignoring case and the
+/// surrounding whitespace. An empty query keeps them all.
+List<String> filterInstances(List<String> names, String query) {
+  final needle = query.trim().toLowerCase();
+  if (needle.isEmpty) return names;
+  return names.where((n) => n.toLowerCase().contains(needle)).toList();
 }
 
 class DistroListState extends State<DistroList> {
@@ -52,6 +66,54 @@ class DistroListState extends State<DistroList> {
   void initState() {
     init();
     super.initState();
+  }
+
+  // Lives here, not in the builder: the 5s poll rebuilds the rows, and the
+  // typed filter has to survive every one of those rebuilds.
+  final TextEditingController _filterController = TextEditingController();
+  String _filter = '';
+
+  void _setFilter(String value) {
+    if (_filterController.text != value) _filterController.text = value;
+    setState(() => _filter = value);
+  }
+
+  @override
+  void dispose() {
+    _filterController.dispose();
+    super.dispose();
+  }
+
+  Widget _filterBox() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8.0, left: 12.0, right: 12.0),
+      // Escape clears, like every other search box on Windows.
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.escape): () =>
+              _setFilter(''),
+        },
+        child: TextBox(
+          key: const ValueKey('test-instance-filter'),
+          controller: _filterController,
+          placeholder: 'filterinstances-text'.i18n(),
+          prefix: const Padding(
+            padding: EdgeInsets.only(left: 8.0),
+            child: Icon(FluentIcons.filter, size: 12),
+          ),
+          suffix: _filter.isEmpty
+              ? null
+              : NamedIconButton(
+                  key: const ValueKey('test-instance-filter-clear'),
+                  label: 'clear-text'.i18n(),
+                  icon: FluentIcons.cancel,
+                  iconSize: 10,
+                  onPressed: () => _setFilter(''),
+                ),
+          onChanged: (value) => setState(() => _filter = value),
+        ),
+      ),
+    );
   }
 
   /// Instances whose pending recipe is being installed right now, so the 5s
@@ -187,16 +249,52 @@ class DistroListState extends State<DistroList> {
           if (list[0] == 'wslNotInstalled') {
             return const InstallDialog();
           }
-          for (String item in list) {
+          // Kept while a query is typed, so deleting instances down to
+          // below the threshold cannot strand a filter nobody can clear.
+          final showFilter =
+              list.length >= kInstanceFilterThreshold || _filter.isNotEmpty;
+          final visible = showFilter ? filterInstances(list, _filter) : list;
+          for (String item in visible) {
             newList.add(ListItem(
+              // A row holds its instance's busy and sync state; filtering
+              // moves rows, and an unkeyed one would hand that state to
+              // whichever instance slid into its slot.
+              key: ValueKey('instance-row-$item'),
               item: item,
               running: running,
               trailing: widget.api.instanceMetaLabel(item),
             ));
           }
+          final rows = ListView.custom(
+            childrenDelegate: SliverChildListDelegate(newList),
+          );
+          if (!showFilter) return Expanded(child: rows);
           return Expanded(
-            child: ListView.custom(
-              childrenDelegate: SliverChildListDelegate(newList),
+            child: Column(
+              children: [
+                _filterBox(),
+                Expanded(
+                  child: visible.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'filternomatch-text'.i18n([_filter.trim()]),
+                                key: const ValueKey(
+                                    'test-instance-filter-empty'),
+                              ),
+                              const SizedBox(height: 12),
+                              Button(
+                                onPressed: () => _setFilter(''),
+                                child: Text('clearfilter-text'.i18n()),
+                              ),
+                            ],
+                          ),
+                        )
+                      : rows,
+                ),
+              ],
             ),
           );
         } else if (snapshot.hasError) {

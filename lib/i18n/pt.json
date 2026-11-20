@@ -1387,5 +1387,8 @@
   "sale-banner-button": "Ver a oferta",
   "sale-applied-text": "%s0: %s1 de desconto, aplicado no checkout.",
   "vmconsolelogtooltip-text": "Ver registo da consola",
-  "vmnoconsolelog-text": "Esta VM ainda não escreveu nada na sua consola."
+  "vmnoconsolelog-text": "Esta VM ainda não escreveu nada na sua consola.",
+  "filterinstances-text": "Filtrar instâncias por nome",
+  "filternomatch-text": "Nenhum nome de instância contém \"%s\".",
+  "clearfilter-text": "Limpar filtro"
 }
