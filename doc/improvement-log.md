@@ -4,7 +4,7 @@ One line per run of the daily improvement job: date · area · change · PR.
 
 ## Log
 
-- 2026-11-20 · User experience · Filter the Home instance list by name once it holds six or more instances · PR_LINK
+- 2026-11-20 · User experience · Filter the Home instance list by name once it holds six or more instances · https://github.com/bostrot/wslmanager/pull/323
 
 ## Lessons from reviews
 
