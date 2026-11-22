@@ -2,7 +2,7 @@ name: wsl2distromanager
 description: A GUI to quickly manage your WSL instances.
 
 publish_to: "none"
-version: 1.11.0 # Current version
+version: 2.6.1 # Current version
 
 environment:
   sdk: ">=2.17.0 <4.0.0"
@@ -13,6 +13,7 @@ dependencies:
   chunked_downloader: ^1.0.0
   desktop_window: ^0.4.2
   dio: ^5.9.0
+  ffi: ^2.1.4
   file_picker: ^10.3.7
   fluent_ui: ^4.13.0
   flutter:
@@ -24,12 +25,14 @@ dependencies:
   flutter_markdown: ^0.7.7
   go_router: ^17.0.0
   http: ^1.6.0
+  intl: ^0.20.2
   localization: ^2.1.1
+  markdown: ^7.2.2
   package_info_plus: ^9.0.0
   path: ^1.9.1
-  plausible_analytics: ^0.3.0
+  plausible_analytics: ^0.4.1
   provider: ^6.1.5
-  re_editor: ^0.8.0
+  re_editor: ^0.10.0
   re_highlight: ^0.0.3
   shared_preferences: ^2.5.3
   shelf: ^1.4.2
@@ -38,9 +41,12 @@ dependencies:
   system_theme: ^3.1.2
   tar: ^2.0.2
   url_launcher: ^6.3.2
+  win32: ^5.15.0
   win32_registry: ^2.1.0
   window_manager: ^0.5.1
+  screen_retriever: ^0.2.0
   yaml: ^3.1.3
+  qr_flutter: ^4.1.0
 dependency_overrides:
   http: ^1.1.0
 
@@ -49,13 +55,16 @@ dev_dependencies:
   flutter_oss_licenses: ^3.0.11
   flutter_test:
     sdk: flutter
+  integration_test:
+    sdk: flutter
   msix: ^3.16.12
 
 flutter:
   uses-material-design: true
   assets:
     - lib/i18n/
-    - assets/scripts/settings.bash
+    - images.json
+    - assets/logo_wsl_manager.png
 
 msix_config:
   display_name: WSL Manager
@@ -70,4 +79,4 @@ msix_config:
   architecture: x64
   capabilities: internetClient,privateNetworkClientServer,runFullTrust
   store: true
-  languages: en-US, en-GB, en-AU, de-DE, pt-BR, pt-PT, zh-CN, zh-TW, tr-TR
+  languages: en-US, en-GB, en-AU, de-DE, es-ES, hu-HU, ja-JP, ko-KR, pt-BR, pt-PT, zh-CN, zh-TW, tr-TR

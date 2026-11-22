@@ -4,11 +4,11 @@ You are very welcome to contribute to this project in order to make it better.
 
 ### Missing distributions
 
-If you find any missing distribution that you think should be added please open a [Distro request](https://github.com/bostrot/wsl2-distro-manager/issues/new?assignees=&labels=distro+request&template=distro-request.md&title=Add+a+new+distribution).
+If you find any missing distribution that you think should be added please open a [Distro request](https://github.com/bostrot/wslmanager/issues/new?assignees=&labels=distro+request&template=distro-request.md&title=Add+a+new+distribution).
 
 ### Docs
 
-Currently generated API docs are available. You can find the documentation [here](https://bostrot.github.io/wsl2-distro-manager/api/index.html).
+Currently generated API docs are available. You can find the documentation [here](https://wslmanager.bostrot.com/doc/api/index.html).
 
 ### Code contributions
 

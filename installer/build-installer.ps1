@@ -1,8 +1,35 @@
+[CmdletBinding()]
+param(
+    # Which build to package; 'auto' lets stage-payload.ps1 pick the one this
+    # machine just produced. The name of the installer follows, because the
+    # x64 and Arm64 setups sit side by side on a release.
+    [ValidateSet('auto', 'x64', 'arm64')]
+    [string]$Architecture = 'auto'
+)
+
 $ErrorActionPreference = 'Stop'
 
 $installerDir = $PSScriptRoot
 $issPath = Join-Path $installerDir 'setup.iss'
-$outputPath = Join-Path $installerDir 'wsl2-distro-manager-setup.exe'
+if ($Architecture -eq 'auto') {
+    # Resolve the same way stage-payload.ps1 does, so the installer's
+    # ArchitecturesAllowed describes the payload it actually stages; the two
+    # disagreeing would produce an Arm64 payload behind an x64compatible
+    # header, which installs and then cannot start.
+    $repoRootPath = Split-Path -Parent $installerDir
+    $hostArch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+    $preferred = if ($hostArch -eq 'ARM64') { @('arm64', 'x64') } else { @('x64', 'arm64') }
+    $targetArch = $preferred |
+        Where-Object { Test-Path (Join-Path $repoRootPath "build\windows\$_\runner\Release") } |
+        Select-Object -First 1
+    # The legacy flat build directory predates the per-architecture ones and is
+    # always an x64 build.
+    if (-not $targetArch) { $targetArch = 'x64' }
+} else {
+    $targetArch = $Architecture
+}
+$outputName = if ($targetArch -eq 'arm64') { 'wsl2-distro-manager-setup-arm64.exe' } else { 'wsl2-distro-manager-setup.exe' }
+$outputPath = Join-Path $installerDir $outputName
 $pubspecPath = Join-Path (Split-Path -Parent $installerDir) 'pubspec.yaml'
 $codeDependenciesPath = Join-Path $installerDir 'CodeDependencies.iss'
 $codeDependenciesUrl = 'https://raw.githubusercontent.com/DomGries/InnoDependencyInstaller/master/CodeDependencies.iss'
@@ -62,13 +89,13 @@ if (-not $iscc) {
     throw 'Inno Setup compiler (ISCC.exe) was not found. Install Inno Setup 6 and retry.'
 }
 
-& (Join-Path $installerDir 'stage-payload.ps1')
+& (Join-Path $installerDir 'stage-payload.ps1') -Architecture $Architecture
 
 if (Test-Path $outputPath) {
     Remove-Item $outputPath -Force
 }
 
-$isccOutput = & $iscc "/DAppVersion=$appVersion" $issPath 2>&1
+$isccOutput = & $iscc "/DAppVersion=$appVersion" "/DTargetArch=$targetArch" $issPath 2>&1
 $isccExitCode = $LASTEXITCODE
 if ($isccExitCode -ne 0) {
     if ($isccOutput) {

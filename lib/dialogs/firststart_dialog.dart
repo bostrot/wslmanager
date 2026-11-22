@@ -12,7 +12,10 @@ import 'package:wsl2distromanager/dialogs/info_dialog.dart';
 /// First start Dialog
 /// @param prefs: SharedPreferences
 /// @param currentVersion: String
-firststartDialog() {
+///
+/// Returns once it is closed, so a caller can queue something behind it —
+/// the AI question does, rather than opening on top of the welcome.
+Future<void> firststartDialog() {
   plausible.event(page: 'changelog');
 
   // Get root context by Key
@@ -33,7 +36,7 @@ Best regards,
 
 Eric
 """;
-  showDialog(
+  return showDialog(
     context: context,
     builder: (context) {
       return ContentDialog(

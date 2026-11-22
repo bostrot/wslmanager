@@ -12,5 +12,5 @@ jobs:
     - uses: actions/first-interaction@v1
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
-        issue-message: "Hello there!\nAs you are a first time Issuer please read our [Code of Conduct](https://github.com/bostrot/wsl2-distro-manager/blob/main/CODE_OF_CONDUCT.md).\nPlease also check whether your issue description is reasonable and complete. If you are having an issue always include the version you are using (WSL, this app, Windows) as well as a way to reproduce it."
-        pr-message: "Hello there!\nAs you are a first time contributor please read our [Code of Conduct](https://github.com/bostrot/wsl2-distro-manager/blob/main/CODE_OF_CONDUCT.md) as well our [Contribution Guideline](https://github.com/bostrot/wsl2-distro-manager/blob/main/CONTRIBUTING.md)."
+        issue-message: "Hello there!\nAs you are a first time Issuer please read our [Code of Conduct](https://github.com/bostrot/wslmanager/blob/main/CODE_OF_CONDUCT.md).\nPlease also check whether your issue description is reasonable and complete. If you are having an issue always include the version you are using (WSL, this app, Windows) as well as a way to reproduce it."
+        pr-message: "Hello there!\nAs you are a first time contributor please read our [Code of Conduct](https://github.com/bostrot/wslmanager/blob/main/CODE_OF_CONDUCT.md) as well our [Contribution Guideline](https://github.com/bostrot/wslmanager/blob/main/CONTRIBUTING.md)."

@@ -38,6 +38,21 @@ void main() {
         .pipe(sink);
   }
 
+  /// The same layer, written without gzip — the shape `docker save` produces.
+  Future<void> createPlainTar(String path, Map<String, String> entries) async {
+    final stream = Stream.fromIterable(entries.entries.map((e) {
+      return TarEntry.data(
+        TarHeader(name: e.key, mode: int.parse('644', radix: 8)),
+        e.value.codeUnits,
+      );
+    }));
+
+    await stream
+        .cast<TarEntry>()
+        .transform(tarWriter)
+        .pipe(File(path).openWrite());
+  }
+
   Future<Map<String, String>> readTar(String path) async {
     final file = File(path);
     final reader = TarReader(file.openRead().transform(gzip.decoder));
@@ -52,6 +67,54 @@ void main() {
     await reader.cancel();
     return result;
   }
+
+  test('merges uncompressed layers, as docker save writes them', () async {
+    // Every layer used to be piped through gzip.decoder, so a plain
+    // `layer.tar` failed the merge with "FormatException: Filter error, bad
+    // data" — which made importing from a local Docker image impossible.
+    final layer1Path = p.join(tempDir.path, 'layer_0.tar');
+    final layer2Path = p.join(tempDir.path, 'layer_1.tar');
+    final outputPath = p.join(tempDir.path, 'output.tar.gz');
+
+    await createPlainTar(layer1Path, {'etc/hostname': 'base', 'etc/keep': 'k'});
+    await createPlainTar(layer2Path, {'etc/hostname': 'top'});
+
+    await processor.mergeLayers([layer1Path, layer2Path], outputPath, (_) {});
+
+    final result = await readTar(outputPath);
+    expect(result['etc/hostname'], 'top');
+    expect(result['etc/keep'], 'k');
+  });
+
+  test('merges a mix of compressed and uncompressed layers', () async {
+    final gzipped = p.join(tempDir.path, 'layer_0.tar.gz');
+    final plain = p.join(tempDir.path, 'layer_1.tar');
+    final outputPath = p.join(tempDir.path, 'output.tar.gz');
+
+    await createTar(gzipped, {'a.txt': 'from gzip'});
+    await createPlainTar(plain, {'b.txt': 'from plain'});
+
+    await processor.mergeLayers([gzipped, plain], outputPath, (_) {});
+
+    final result = await readTar(outputPath);
+    expect(result['a.txt'], 'from gzip');
+    expect(result['b.txt'], 'from plain');
+  });
+
+  test('applies a whiteout carried by an uncompressed layer', () async {
+    final layer1Path = p.join(tempDir.path, 'layer_0.tar');
+    final layer2Path = p.join(tempDir.path, 'layer_1.tar');
+    final outputPath = p.join(tempDir.path, 'output.tar.gz');
+
+    await createPlainTar(layer1Path, {'etc/gone': 'x', 'etc/stays': 'y'});
+    await createPlainTar(layer2Path, {'etc/.wh.gone': ''});
+
+    await processor.mergeLayers([layer1Path, layer2Path], outputPath, (_) {});
+
+    final result = await readTar(outputPath);
+    expect(result.containsKey('etc/gone'), isFalse);
+    expect(result['etc/stays'], 'y');
+  });
 
   test('merges simple layers', () async {
     final layer1Path = p.join(tempDir.path, 'layer1.tar.gz');

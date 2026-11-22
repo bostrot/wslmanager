@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:chunked_downloader/chunked_downloader.dart';
+import 'package:archive/archive.dart';
+import 'package:wsl2distromanager/api/downloader.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:localization/localization.dart';
 import 'package:wsl2distromanager/api/layer_processor.dart';
+import 'package:wsl2distromanager/api/rootfs_architecture.dart';
 import 'package:wsl2distromanager/api/safe_paths.dart';
 import 'package:wsl2distromanager/components/helpers.dart';
 import 'package:wsl2distromanager/components/logging.dart';
@@ -123,19 +126,37 @@ class PlatformManifest {
       PlatformManifest(architecture: map["architecture"], os: map["os"]);
 }
 
+/// What Docker calls the architecture of [family] — the Go spelling, which is
+/// what a manifest list uses. An unknown machine is served the Intel image,
+/// the way the whole catalogue is.
+String dockerArchitectureName(String family) =>
+    family == rootfsArmFamily ? 'arm64' : 'amd64';
+
+/// The manifest a multi-architecture tag offers for [family], or null when it
+/// offers nothing that can run there.
+///
+/// The pick is explicit rather than "the first entry with that architecture":
+/// a tag routinely also carries Windows images, which this app cannot import
+/// into WSL, and 32-bit `arm` is not a substitute for `arm64` — WSL on a
+/// Windows-on-ARM machine is 64-bit only. Before this there was no pick at
+/// all: the amd64 entry was taken on every machine, so a Docker distro on such
+/// a machine imported an image whose binaries it could not run.
+Manifest? manifestForArchitecture(List<Manifest> manifests, String family) {
+  final wanted = dockerArchitectureName(family);
+  for (final entry in manifests) {
+    final platform = entry.platform;
+    if (platform == null || platform.architecture != wanted) continue;
+    // An entry that does not say which OS it is for is taken at its word.
+    if (platform.os.isNotEmpty && platform.os != 'linux') continue;
+    if (entry.digest.isEmpty) continue;
+    return entry;
+  }
+  return null;
+}
+
 typedef ProgressCallback = void Function(int count, int total);
 typedef TotalProgressCallback = void Function(
     int count, int total, int countStep, int totalStep);
-
-typedef ChunkedDownloaderFactory = ChunkedDownloader Function({
-  required String url,
-  required String saveFilePath,
-  Map<String, String>? headers,
-  int? chunkSize,
-  Function(int, int, double)? onProgress,
-  Function(File)? onDone,
-  Function(dynamic)? onError,
-});
 
 class DockerImage {
   String registryUrl;
@@ -155,23 +176,8 @@ class DockerImage {
         registryUrl = registryUrl ??
             prefs.getString('DockerRepoLink') ??
             'https://registry-1.docker.io',
-        chunkedDownloaderFactory = chunkedDownloaderFactory ??
-            ((
-                    {required url,
-                    required saveFilePath,
-                    headers,
-                    chunkSize,
-                    onProgress,
-                    onDone,
-                    onError}) =>
-                ChunkedDownloader(
-                    url: url,
-                    saveFilePath: saveFilePath,
-                    headers: headers,
-                    chunkSize: chunkSize ?? 1024 * 1024,
-                    onProgress: onProgress,
-                    onDone: onDone,
-                    onError: onError)) {
+        chunkedDownloaderFactory =
+            chunkedDownloaderFactory ?? defaultChunkedDownloaderFactory {
     String? mirror = prefs.getString('DockerMirror');
     if (mirror != null && mirror.isNotEmpty) {
       this.registryUrl = mirror;
@@ -330,15 +336,21 @@ class DockerImage {
       // Get manifest
       final data = Manifests.fromMap(manifestData);
 
-      // Find amd64 digest
-      var manifest = data.manifests.firstWhere(
-          (element) => element.platform?.architecture == 'amd64',
-          orElse: () => Manifest.empty());
-      var digest = manifest.digest;
+      // Find the digest for this machine's architecture
+      final family = rootfsHostArchitecture();
+      final manifest = manifestForArchitecture(data.manifests, family);
+      if (manifest == null) {
+        logError(
+            StateError('$image has no ${dockerArchitectureName(family)} image'),
+            StackTrace.current,
+            null);
+        return "false";
+      }
+      final digest = manifest.digest;
 
-      // Download amd64 blob
+      // Download the blob for that architecture
       if (kDebugMode) {
-        print('Downloading $image amd64 blob');
+        print('Downloading $image ${dockerArchitectureName(family)} blob');
       }
       try {
         imageManifest =
@@ -370,8 +382,8 @@ class DockerImage {
                 if (int.tryParse(userStr) == null) {
                   prefs.setString('StartUser_$distroName', userStr);
                 } else {
-                  Notify.message(
-                      'Not implemented yet: Docker USER is a number.');
+                  Notify.message('dockerusernumber-text'.i18n(),
+                      severity: InfoBarSeverity.warning);
                 }
               }
 
@@ -505,7 +517,8 @@ class DockerImage {
               } else {
                 // User is a number
                 // TODO: implement docker user is a number
-                Notify.message('Not implemented yet: Docker USER is a number.');
+                Notify.message('dockerusernumber-text'.i18n(),
+                    severity: InfoBarSeverity.warning);
               }
             }
           });
@@ -551,7 +564,8 @@ class DockerImage {
         });
       }
     } else {
-      Notify.message('Unknown manifest type');
+      Notify.message('unknownmanifest-text'.i18n(),
+          severity: InfoBarSeverity.error);
       logError(exception ?? "No exception", stacktrace ?? StackTrace.current,
           imageManifest.toString());
       return "false";
@@ -636,7 +650,7 @@ class DockerImage {
       }
     }
 
-    Notify.message('Extracting layers ...');
+    Notify.message('extractinglayersall-text'.i18n());
 
     // Extract layers
     // Write the compressed tar file to disk.
@@ -660,7 +674,8 @@ class DockerImage {
         retry++;
         if (retry == 2) {
           logDebug(e, stackTrace, null);
-          Notify.message('${'error-text'.i18n()}: $e');
+          Notify.message('mergelayersfailed-text'.i18n(),
+              severity: InfoBarSeverity.error);
           return false;
         }
         await Future.delayed(const Duration(seconds: 1));
@@ -732,5 +747,192 @@ class DockerImage {
     }
     final tagFilename = tag.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
     return '${filename}_$tagFilename';
+  }
+
+  /// List local Docker images available on the system.
+  /// Returns a list of strings in format "repository:tag" or "<none>:<none>".
+  static Future<List<String>> listLocalImages() async {
+    final result = await Process.run(
+      'docker',
+      ['image', 'ls', '--format', '{{.Repository}}:{{.Tag}}'],
+    );
+
+    if (result.exitCode != 0) {
+      throw Exception('Failed to list Docker images: ${result.stderr}');
+    }
+
+    final output = result.stdout.toString().trim();
+    if (output.isEmpty) {
+      return [];
+    }
+
+    return output.split('\n').where((line) => line.isNotEmpty).toList();
+  }
+
+  /// Export a local Docker image to a tar file using docker save, then extract
+  /// layers for WSL import. Reuses the existing layer processing pipeline.
+  Future<bool> getRootfsFromLocalImage(
+    String name,
+    String imagePath, {
+    required TotalProgressCallback progress,
+  }) async {
+    distroName = name;
+    var distroPath = getDistroPath().path;
+    final imageName = filename(imagePath.split(':')[0], imagePath.split(':').length > 1 ? imagePath.split(':')[1] : null);
+    final tmpImagePath = (getTmpPath()..cd('local_$imageName')).path;
+
+    Notify.message('exportinglocalimage-text'.i18n());
+
+    // Create temp directory for docker save output
+    await Directory(tmpImagePath).create(recursive: true);
+    final tarFilePath = SafePath(tmpImagePath).file('image.tar');
+
+    // Run docker save to export the image
+    if (kDebugMode) {
+      print('Running: docker save -o $tarFilePath $imagePath');
+    }
+    final saveResult = await Process.run(
+      'docker',
+      ['save', '-o', tarFilePath, imagePath],
+    );
+
+    if (saveResult.exitCode != 0) {
+      final err = '${saveResult.stderr.toString()}';
+      throw Exception('Failed to export Docker image: $err');
+    }
+
+    // Parse the docker save tarball to extract layers
+    Notify.message('extractinglayersall-text'.i18n());
+
+    await _processDockerSaveTar(
+      tarFilePath,
+      tmpImagePath,
+      imagePath,
+      progress,
+    );
+
+    final outTarGz = SafePath(distroPath).file('$imageName.tar.gz');
+
+    // Get layer paths from the extracted directory
+    List<String> layerPaths = [];
+    final parentPath = SafePath(tmpImagePath);
+    int i = 0;
+    while (File(parentPath.file('layer_$i.tar')).existsSync()) {
+      layerPaths.add(parentPath.file('layer_$i.tar'));
+      i++;
+    }
+
+    if (layerPaths.isEmpty) {
+      throw Exception('No layers found in Docker image');
+    }
+
+    int retry = 0;
+    while (retry < 2) {
+      try {
+        await LayerProcessor()
+            .mergeLayers(layerPaths, outTarGz, (msg) => Notify.message(msg));
+        retry = 2;
+        break;
+      } catch (e, stackTrace) {
+        retry++;
+        if (retry == 2) {
+          logDebug(e, stackTrace, null);
+          Notify.message('mergelayersfailed-text'.i18n(),
+              severity: InfoBarSeverity.error);
+          return false;
+        }
+        await Future.delayed(const Duration(seconds: 1));
+        if (kDebugMode) {
+          print('Retrying $retry');
+        }
+      }
+    }
+
+    // Check if tar file is created
+    if (!File(outTarGz).existsSync()) {
+      throw Exception('Tar file is not created');
+    }
+
+    // Cleanup temp directory
+    await Directory(tmpImagePath).delete(recursive: true);
+    return true;
+  }
+
+  /// Process a docker save tarball: parse manifest.json and extract layers.
+  Future<void> _processDockerSaveTar(
+    String tarPath,
+    String outputPath,
+    String imagePath,
+    TotalProgressCallback progress,
+  ) async {
+    // Read the tar file bytes
+    final tarBytes = File(tarPath).readAsBytesSync();
+
+    // Use archive package v4 to read the tar
+    final decoder = TarDecoder().decodeBytes(tarBytes);
+
+    // Find manifest.json
+    String? manifestContent;
+    for (final file in decoder) {
+      if (file.name == 'manifest.json') {
+        manifestContent = utf8.decode(file.readBytes()!);
+        break;
+      }
+    }
+
+    if (manifestContent == null) {
+      throw Exception('No manifest.json found in docker save archive');
+    }
+
+    // Parse manifest.json to get layer info
+    final manifestList = json.decode(manifestContent) as List<dynamic>;
+    if (manifestList.isEmpty) {
+      throw Exception('Empty manifest.json');
+    }
+
+    final manifest = manifestList[0] as Map<String, dynamic>;
+    final layers = manifest['Layers'] as List<dynamic>;
+
+    // Ensure output directory exists
+    await Directory(outputPath).create(recursive: true);
+
+    // Extract each layer from the tar archive
+    for (int idx = 0; idx < layers.length; idx++) {
+      progress(idx, layers.length, 0, 100);
+      final layerRef = layers[idx] as String;
+      final layerTarPath = '$layerRef/layer.tar';
+
+      if (kDebugMode) {
+        print('Extracting layer $idx: $layerTarPath');
+      }
+
+      // Extract this specific layer from the tar
+      final outLayerPath = SafePath(outputPath).file('layer_$idx.tar');
+      await _extractFileFromTar(tarBytes, layerTarPath, outLayerPath);
+
+      if (!(await File(outLayerPath).exists())) {
+        throw Exception('Failed to extract layer $idx: $layerTarPath');
+      }
+    }
+
+    progress(layers.length - 1, layers.length, 100, 100);
+  }
+
+  /// Extract a single file from a tar archive.
+  Future<void> _extractFileFromTar(
+    List<int> tarBytes,
+    String entryName,
+    String outputPath,
+  ) async {
+    final decoder = TarDecoder().decodeBytes(tarBytes);
+
+    for (final file in decoder) {
+      if (file.name == entryName) {
+        await File(outputPath).writeAsBytes(file.readBytes()!);
+        return;
+      }
+    }
+
+    throw Exception('Entry not found in tar: $entryName');
   }
 }

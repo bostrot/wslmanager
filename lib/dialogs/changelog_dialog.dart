@@ -11,13 +11,16 @@ import 'package:wsl2distromanager/components/helpers.dart';
 /// Info Dialog
 /// @param prefs: SharedPreferences
 /// @param currentVersion: String
-changelogDialog(prefs, currentVersion, body) {
+///
+/// Returns once it is closed, so a caller can queue something behind it —
+/// the AI question does, rather than opening on top of the release notes.
+Future<void> changelogDialog(prefs, currentVersion, body) {
   plausible.event(page: 'changelog');
 
   // Get root context by Key
   final context = GlobalVariable.infobox.currentContext!;
 
-  showDialog(
+  return showDialog(
     context: context,
     builder: (context) {
       return ContentDialog(

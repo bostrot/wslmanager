@@ -1,0 +1,14 @@
+{
+  "_comment": [
+    "Microsoft Store pricing for WSL Manager: the listing is free, and Pro is bought on wslmanager.com.",
+    "This is the file a release publishes (the Publish to Microsoft Store workflow defaults to it).",
+    "priceId Free with an empty marketSpecificPricings clears every per-market price; markets the",
+    "clone marks NotAvailable are kept by scripts/store_pricing.jq, because that is availability,",
+    "not price. The paid tiers this replaced are in store/pricing-paid.json for rolling back.",
+    "The app agrees: storeFreeFromUtc in lib/components/constants.dart names the instant the listing",
+    "goes free, and this file must never publish before a build carrying it is on the way \u2014 the",
+    "same workflow run does both. See doc/microsoft-store-freemium.md."
+  ],
+  "priceId": "Free",
+  "marketSpecificPricings": {}
+}

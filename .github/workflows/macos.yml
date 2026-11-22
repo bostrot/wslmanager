@@ -1,0 +1,240 @@
+name: macOS
+
+on:
+  push:
+    paths:
+      - "lib/**"
+      - "macos/**"
+      - "assets/**"
+      - "scripts/**"
+      - "pubspec.yaml"
+      - ".github/workflows/macos.yml"
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    # Apple silicon runner: matches the arm64-only vmctl target and the
+    # Apple-silicon Xcode toolchain the app is developed against. macos-14
+    # is deprecated and defaults to Xcode 15.4 (Swift 5.10), which cannot
+    # even read vmctl's swift-tools-version 6.0 manifest or run its Swift
+    # Testing suite; macos-26 ships Xcode 26.6, the version the app is built
+    # and verified with locally.
+    runs-on: macos-26
+    env:
+      # Secrets cannot be tested in a step `if`, so the presence check lives
+      # here and the steps key off HAS_SIGNING.
+      HAS_SIGNING: ${{ secrets.MACOS_SIGNING_CERT_P12 != '' }}
+      HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same pin as test.yml — an unpinned 'stable' breaks CI with no change
+      # on our side.
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          flutter-version: '3.41.6'
+
+      - name: Check translations
+        run: dart run scripts/check_translations.dart
+
+      - name: Enable macOS Desktop
+        run: flutter config --enable-macos-desktop
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Warnings and errors stay fatal. Infos do not: the tree carries a
+      # long tail of style-only hints (dangling doc comments, deprecated
+      # fluent_ui members, super parameters) that flutter analyze otherwise
+      # turns into a red build with no functional change behind it.
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Run tests
+        run: flutter test
+
+      # Same empty define scripts/build_macos.sh passes below while the
+      # WSLMANAGER_GITHUB_CLIENT_ID variable is unset; it must resolve to the
+      # bundled id.
+      - name: Run sharing tests with an empty client-id define
+        run: flutter test --dart-define=GITHUB_CLIENT_ID= test/github_publish_test.dart
+
+      - name: Run vmctl tests
+        run: ./scripts/test_vmctl.sh
+
+      - name: Run Homebrew cask checks
+        run: ./scripts/test_homebrew_cask.sh
+
+      # Developer ID signing and notarization run when the four secrets
+      # below exist; without them the build is ad-hoc signed (runs locally
+      # and via right-click → Open, but Gatekeeper refuses it on first open).
+      #   MACOS_SIGNING_CERT_P12       base64 of the Developer ID Application
+      #                                .p12 (certificate + private key)
+      #   MACOS_SIGNING_CERT_PASSWORD  its password
+      #   NOTARY_KEY_P8                the App Store Connect API key (.p8 text)
+      #   NOTARY_KEY_ID / NOTARY_ISSUER_ID   from App Store Connect → Integrations
+      - name: Import signing certificate
+        if: env.HAS_SIGNING == 'true'
+        env:
+          CERT_P12: ${{ secrets.MACOS_SIGNING_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_SIGNING_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$CERT_PASSWORD" -A \
+            -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychain -d user -s "$KEYCHAIN" login.keychain
+          rm -f "$RUNNER_TEMP/cert.p12"
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" \
+            | grep -o '"Developer ID Application: [^"]*"' | head -1 | tr -d '"')
+          [ -n "$IDENTITY" ] || { echo "no Developer ID identity in the p12" >&2; exit 1; }
+          echo "CODESIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
+      # WSLMANAGER_GITHUB_CLIENT_ID is an optional repository *variable*
+      # (Settings → Secrets and variables → Actions → Variables), not a
+      # secret: the OAuth client id is public. It overrides the id bundled
+      # in lib/api/github_publish.dart; unset, the bundled id ships. See
+      # doc/github-oauth-setup.md.
+      - name: Build app with vmctl
+        env:
+          GITHUB_CLIENT_ID: ${{ vars.WSLMANAGER_GITHUB_CLIENT_ID }}
+        run: ./scripts/build_macos.sh
+
+      - name: Get version
+        id: get_version
+        run: echo "version=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Sign, notarize and package
+        if: env.HAS_SIGNING == 'true'
+        env:
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          NOTARY_PROFILE: ci-notary
+        run: |
+          printf '%s' "$NOTARY_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+          xcrun notarytool store-credentials "$NOTARY_PROFILE" \
+            --key "$RUNNER_TEMP/AuthKey.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID"
+          rm -f "$RUNNER_TEMP/AuthKey.p8"
+          ./scripts/sign_macos_release.sh \
+            "build/macos/Build/Products/Release/WSL Manager.app" \
+            "${{ steps.get_version.outputs.version }}" "$PWD"
+
+      - name: Package (ad-hoc build)
+        if: env.HAS_SIGNING != 'true'
+        run: |
+          APP="build/macos/Build/Products/Release/WSL Manager.app"
+          STAGE=$(mktemp -d)
+          cp -R "$APP" "$STAGE/"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname "WSL Manager" -srcfolder "$STAGE" -ov -format UDZO \
+            "wsl2-distro-manager-v${{ steps.get_version.outputs.version }}-macos.dmg"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" \
+            "wsl2-distro-manager-v${{ steps.get_version.outputs.version }}-macos.zip"
+
+      - name: Upload nightly artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: |
+            wsl2-distro-manager-v${{ steps.get_version.outputs.version }}-macos.dmg
+            wsl2-distro-manager-v${{ steps.get_version.outputs.version }}-macos.zip
+
+      # The Windows releaser creates the GitHub release on main; this only
+      # attaches the mac artifacts to it once it exists. Best effort: on a
+      # race (release not created yet) the nightly artifacts above still
+      # carry the build, and the next main build attaches them.
+      #
+      # A dmg that is on the release stays there. Two casks point at it by
+      # checksum: bostrot/homebrew-tap, which the step below rewrites, and
+      # Homebrew's own homebrew/cask, which BrewTestBot bumps within hours of
+      # a tag and nothing here can touch. Replacing the dmg under a released
+      # tag changes the checksum under that cask, and every `brew upgrade
+      # wsl-manager` then fails with "Cask reports different checksum" until
+      # the next version — 2.3.0 broke that way on 2026-09-17, and 2.0.2 the
+      # same way for the tap when HOMEBREW_TAP_TOKEN had expired
+      # (bostrot/ai-tasks#63). Later builds of the same version only ever
+      # ship as nightly artifacts; a bad release asset is replaced by hand,
+      # together with a version bump.
+      #
+      # An unsigned build attaches nothing: it would pin an ad-hoc dmg that
+      # Gatekeeper rejects to the release for good.
+      - name: Attach to release (main only)
+        if: github.ref == 'refs/heads/main'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          TAG="v$VERSION"
+          if [ "$HAS_SIGNING" != "true" ]; then
+            echo "This build is unsigned; not attaching it to $TAG."
+            exit 0
+          fi
+          if gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null \
+               | grep -q -- '-macos.dmg$'; then
+            echo "$TAG already carries a macOS dmg; leaving it alone."
+            exit 0
+          fi
+          for i in 1 2 3 4 5; do
+            if gh release upload "$TAG" \
+              "wsl2-distro-manager-v${{ steps.get_version.outputs.version }}-macos.dmg" \
+              "wsl2-distro-manager-v${{ steps.get_version.outputs.version }}-macos.zip"; then
+              exit 0
+            fi
+            sleep 60
+          done
+          exit 1
+
+      # The cask cannot live in this repository: `brew tap bostrot/tap`
+      # resolves by name to github.com/bostrot/homebrew-tap, and only the
+      # two-argument `brew tap <name> <url>` form escapes that convention —
+      # which would cost the one-line `brew install --cask
+      # bostrot/tap/wsl-manager` the README and the release notes advertise.
+      # So the cask stays in the tap; what it no longer needs is a human to
+      # retype the version and the checksum after every release.
+      #
+      # HOMEBREW_TAP_TOKEN is a token with contents:write on
+      # bostrot/homebrew-tap. Without it the step is skipped, so forks and
+      # contributors' builds are unaffected.
+      - name: Update the Homebrew cask (main only)
+        if: github.ref == 'refs/heads/main' && env.HAS_TAP_TOKEN == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ steps.get_version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          TAG="v$VERSION"
+          DMG="wsl2-distro-manager-v$VERSION-macos.dmg"
+
+          # Hash what the release actually serves rather than the file just
+          # built: the attach step above never replaces an asset, so the two
+          # are the same bytes only for the build that attached it. A cask
+          # whose sha256 does not match the download fails for every user
+          # with a checksum error.
+          if ! gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+               --pattern "$DMG" --dir "$RUNNER_TEMP" --clobber; then
+            echo "::notice::$TAG carries no $DMG; leaving the cask alone."
+            exit 0
+          fi
+          # Homebrew quarantines what a cask installs, so pointing it at a
+          # build Gatekeeper rejects is worse than leaving it stale: every
+          # `brew install` then dies with "damaged and can't be opened".
+          # The attach step never publishes an ad-hoc dmg, but one uploaded
+          # by hand can be — so check the artifact, not this job's own
+          # config.
+          if ! xcrun stapler validate "$RUNNER_TEMP/$DMG" >/dev/null 2>&1; then
+            echo "::warning::$DMG is not notarized; leaving the cask where it is."
+            exit 0
+          fi
+
+          ./scripts/update_homebrew_cask.sh update "$VERSION" "$RUNNER_TEMP/$DMG"

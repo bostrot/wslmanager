@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:wsl2distromanager/api/snippet_env.dart';
 import 'package:wsl2distromanager/components/helpers.dart';
 import 'package:yaml/yaml.dart';
 
@@ -12,6 +14,7 @@ class QuickActionItem {
       this.license = '',
       this.git = '',
       this.distro = '',
+      this.env = const [],
       required this.content});
 
   String name;
@@ -21,7 +24,16 @@ class QuickActionItem {
   String license;
   String git;
   dynamic distro; // either a string or a list of strings
+
+  /// The environment the snippet asks for before it runs, from the `env:`
+  /// block of its `info.yml`.
+  List<SnippetEnvVar> env;
   String content;
+
+  /// What to ask the user for before running this snippet: what it declares,
+  /// or — for a snippet that declares nothing, such as a hand-written local
+  /// one — what its script reads from the environment.
+  List<SnippetEnvVar> get envPrompts => SnippetEnv.prompts(env, content);
 
   /// Load from yaml string
   static QuickActionItem fromYamlString(String yamlString,
@@ -59,20 +71,27 @@ class QuickActionItem {
         license: yaml['license'],
         git: yaml['git'],
         distro: yaml['distro'],
+        env: SnippetEnv.parseOrEmpty(yaml['env']),
         content: content);
   }
 
-  /// To yaml string
+  /// To yaml string.
+  ///
+  /// Scalars are JSON-quoted (valid YAML double-quoted scalars) so an empty
+  /// field stays a string instead of parsing back as null — an unquoted
+  /// `description: ` is YAML null, which [fromYamlString] rejects, dropping
+  /// the whole snippet from the list on reload.
   String toYamlString() {
-    return '''
-name: $name
-description: $description
-version: $version
-author: $author
-license: $license
-git: $git
-distro: $distro
-''';
+    final distroYaml =
+        distro is List ? distro.toString() : jsonEncode(distro?.toString() ?? '');
+    return 'name: ${jsonEncode(name)}\n'
+        'description: ${jsonEncode(description)}\n'
+        'version: ${jsonEncode(version)}\n'
+        'author: ${jsonEncode(author)}\n'
+        'license: ${jsonEncode(license)}\n'
+        'git: ${jsonEncode(git)}\n'
+        'distro: $distroYaml\n'
+        '${env.isEmpty ? '' : 'env: ${SnippetEnv.toYamlValue(env)}\n'}';
   }
 }
 
@@ -119,6 +138,19 @@ class QuickAction {
     // Set shared prefs
     prefs.setStringList('quickSettingsTitles', quickSettingsTitles);
     prefs.setStringList('quickSettingsContents', quickSettingsContents);
+  }
+
+  /// The saved snippet names, in list order — the titles list as stored, so
+  /// no YAML is parsed; enough for "does this name exist" and "pick a free
+  /// name", which is what callers on a build path or a save path need.
+  List<String> names() => prefs.getStringList('quickSettingsTitles') ?? [];
+
+  /// The snippet called [name], or null once it is gone.
+  QuickActionItem? byName(String name) {
+    for (final item in getFromPrefs()) {
+      if (item.name == name) return item;
+    }
+    return null;
   }
 
   List<QuickActionItem> getFromPrefs() {

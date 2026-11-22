@@ -1,4 +1,7 @@
 /// Tests for the safe_paths class.
+@TestOn('windows')
+library safepaths_test;
+
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';

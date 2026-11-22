@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [ main ]
 
+# See the note in releaser.yml: Windows Arm64 engine artifacts start at
+# Flutter 3.44.0, so the Arm64 job cannot share the pin below.
+env:
+  FLUTTER_ARM64_VERSION: '3.44.9'
+
 jobs:
   test:
     runs-on: windows-latest
@@ -13,9 +18,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      # Pin the SDK: an unpinned 'stable' silently picks up whatever Flutter
+      # released most recently, so CI can break with no change on our side
+      # (that is exactly how re_editor started failing to compile). Bump this
+      # deliberately, after verifying a build locally on the same version.
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          flutter-version: '3.41.6'
+
+      - name: Check translations
+        run: dart run scripts/check_translations.dart
           
       - name: Enable Windows Desktop
         run: flutter config --enable-windows-desktop
@@ -25,3 +38,48 @@ jobs:
         
       - name: Run tests
         run: flutter test
+
+      # `flutter test` never compiles windows/runner, and the runner now has
+      # C++/WinRT of its own (store_channel.cpp) built under /W4 /WX. Without
+      # this a compile error would only show up in the release run.
+      - name: Build the Windows runner
+        run: flutter build windows --release
+
+      # Release builds pass --dart-define=GITHUB_CLIENT_ID= (empty) while the
+      # optional WSLMANAGER_GITHUB_CLIENT_ID variable is unset; make sure that
+      # state keeps resolving to the bundled id (doc/github-oauth-setup.md).
+      - name: Run sharing tests with an empty client-id define
+        run: flutter test --dart-define=GITHUB_CLIENT_ID= test/github_publish_test.dart
+
+  # windows/runner is compiled for Arm64 nowhere else until a release is being
+  # cut, and it is C++/WinRT under /W4 /WX — an intrinsic or a narrowing
+  # conversion that only MSVC's ARM64 target objects to would otherwise surface
+  # in the release run, after the x64 build has already made the tag. The Dart
+  # tests are not repeated here: they are the same code on the same VM.
+  build-arm64:
+    runs-on: windows-11-arm
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Not subosito/flutter-action: Flutter publishes no Arm64 SDK archive for
+      # Windows, so the action cannot resolve one here — and pinning it to x64
+      # to get past that builds an x64 app under emulation. Cloning bootstraps
+      # the native Arm64 Dart SDK. releaser.yml says more.
+      - name: Install Flutter (native Arm64)
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch $env:FLUTTER_ARM64_VERSION https://github.com/flutter/flutter.git "$env:RUNNER_TEMP\flutter"
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:RUNNER_TEMP\flutter\bin"
+
+      - name: Enable Windows Desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build the Windows runner
+        run: flutter build windows --release
+
+      - name: Verify the binary is Arm64
+        run: dart run scripts/check_pe_architecture.dart build\windows\arm64\runner\Release\wsl2distromanager.exe arm64

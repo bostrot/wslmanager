@@ -1,0 +1,73 @@
+# Publishes cdn/scripts.json — the community catalogue the app reads.
+#
+# The file lives on the `catalogue` branch, which nothing protects, and the
+# app reads it raw from there. It used to be committed to main and served by
+# GitHub Pages, but main requires a pull request now, and on a personal
+# repository the workflow token cannot be put on the bypass list, so every
+# push was rejected. The app falls back to walking bostrot/wsl-scripts itself
+# if the file is ever unreachable, which is the old, slow path.
+#
+# The commit lands outside 08:00-20:00 Berlin time on purpose — 04:17 UTC is
+# 06:17 CEST, 05:17 CET — matching how this repository's history is kept.
+name: Community catalogue
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+  # So bostrot/wsl-scripts can publish the moment a script changes:
+  #   gh api repos/bostrot/wslmanager/dispatches \
+  #     -f event_type=community-scripts-updated
+  repository_dispatch:
+    types: [community-scripts-updated]
+  push:
+    # Not on tags: that checkout is detached and has nothing to push.
+    branches: [main]
+    paths:
+      - 'scripts/build_community_catalogue.dart'
+      - '.github/workflows/community-catalogue.yml'
+
+concurrency:
+  group: community-catalogue
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The branch the file is published on, checked out beside the generator
+      # so the commit below touches nothing on main.
+      - uses: actions/checkout@v4
+        with:
+          ref: catalogue
+          path: catalogue
+
+      # The generator imports dart:io and dart:convert only, so it runs
+      # without `pub get` and without the Flutter toolchain.
+      - uses: dart-lang/setup-dart@v1
+
+      - name: Build the catalogue
+        env:
+          # A thousand requests an hour instead of the sixty an anonymous
+          # caller gets — which is the whole reason the per-script dates can
+          # be resolved here and not on the user's machine.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: dart scripts/build_community_catalogue.dart catalogue/cdn/scripts.json
+
+      - name: Commit when it changed
+        working-directory: catalogue
+        run: |
+          if git diff --quiet -- cdn/scripts.json; then
+            echo "The catalogue is unchanged; nothing to commit."
+            exit 0
+          fi
+          git config user.name 'Eric Trenkel'
+          git config user.email 'eric@bostrot.com'
+          git add cdn/scripts.json
+          git commit -m "Refresh the community script catalogue"
+          git push origin HEAD:catalogue

@@ -1,0 +1,975 @@
+{
+  "name": "WSL Manager Checkout",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wsl-manager/stripe-events",
+        "options": {}
+      },
+      "id": "c23a5473-9991-442f-b859-135236997aed",
+      "name": "Stripe events",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1888,
+        256
+      ],
+      "webhookId": "7c1d94ab-52e0-4f3a-9b18-6ad3e0f47c21"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.stripe.com/v1/checkout/sessions/{{ $json.body.data.object.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "stripeApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "expand[]",
+              "value": "line_items"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "77eee77a-fa52-4cf7-af71-0b56caef92b7",
+      "name": "Re-fetch session",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1440,
+        256
+      ],
+      "credentials": {
+        "stripeApi": {
+          "id": "YgOHiL5LMVAGtRJ2",
+          "name": "Stripe PROD account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "p1",
+              "leftValue": "={{ $json.payment_status }}",
+              "rightValue": "paid",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a38ff03e-4c11-48c8-b1a0-7d93066e5990",
+      "name": "Actually paid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1232,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turns a *verified* Stripe Checkout session into a licence row — or, when\n// the run came from the Manual Trigger, the details Eric typed into the\n// \"Manual request\" node.\n//\n// Stripe path: the event body that reached the webhook is not trusted. The\n// previous node re-fetched the session straight from the Stripe API using our\n// own secret key, and the IF before this one dropped anything that is not\n// actually paid. So everything below reads from the re-fetched session, never\n// from the posted payload. The node right before this one looked the session\n// up in the licence table: a row that already exists means Stripe delivered\n// this event before (it retries on anything but a 2xx) and the customer may\n// already hold that key — so it is kept, never rotated.\n//\n// Manual path: someone wrote in with an old licence (pre-Stripe, lost, or\n// otherwise unusable) and needs a fresh key — or bought a Team plan by email.\n// There is no Stripe session, so the row gets a synthetic session id, a\n// brand-new key, and the normal licence email goes out. Any old row that\n// customer has is left untouched; deactivate it by hand in the data table if\n// it should stop validating.\n//\n// Three plans: `pro` (one seat, perpetual), `commercial` (the purchased seats,\n// perpetual) and `team` (the purchased seats, a yearly subscription — the row\n// expires, and \"Team change\" moves the date on every paid renewal).\n\n// Crockford-ish alphabet: no I, O, 0 or 1, so a key read off a screen and\n// typed into the app cannot be ambiguous.\nconst ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';\nfunction block(n) {\n  let bytes = null;\n  try {\n    bytes = globalThis.crypto.getRandomValues(new Uint8Array(n));\n  } catch (e) {\n    bytes = null;\n  }\n  let out = '';\n  for (let i = 0; i < n; i++) {\n    const v = bytes ? bytes[i] : Math.floor(Math.random() * 256);\n    out += ALPHABET[v % ALPHABET.length];\n  }\n  return out;\n}\nfunction newKey() {\n  return ['WSLM', block(5), block(5), block(5), block(5)].join('-');\n}\n// Perpetual. The validator compares against this date, so a null would read\n// as expired rather than as \"never expires\".\nconst NEVER = '2099-12-31T00:00:00.000Z';\n\n// A Team licence is billed yearly. The session does not say when the first\n// period ends, so the row is written a year ahead plus a grace period; the\n// first renewal invoice then moves it to the period Stripe actually billed.\n// The grace outlasts Stripe's retries of a failed card (about two weeks), so\n// a renewal that needs a second attempt never locks a team out.\nconst TEAM_TERM_DAYS = 365;\nconst TEAM_GRACE_DAYS = 14;\nfunction teamExpiry(now) {\n  return new Date(\n    now.getTime() + (TEAM_TERM_DAYS + TEAM_GRACE_DAYS) * 86400000\n  ).toISOString();\n}\n\nconst PER_SEAT = ['commercial', 'team'];\n\n// The plan a session was sold as: the Payment Link's `tier` metadata, which\n// Stripe copies onto the session, or failing that the price's lookup key\n// (`team_seat_year`, `commercial_seat`, `pro_windows`, `pro_macos`).\nfunction tierOf(session) {\n  const meta = String((session.metadata && session.metadata.tier) || '')\n    .trim()\n    .toLowerCase();\n  if (meta) return meta;\n  const items = (session.line_items && session.line_items.data) || [];\n  const keys = Array.isArray(items)\n    ? items.map((i) => String((i && i.price && i.price.lookup_key) || ''))\n    : [];\n  if (keys.some((k) => k.startsWith('team'))) return 'team';\n  if (keys.some((k) => k.startsWith('commercial'))) return 'commercial';\n  return 'pro';\n}\n\nfunction manualLicence(input, now) {\n  const email = String(input.email || '').trim();\n  if (!email || !email.includes('@')) {\n    throw new Error('Manual request: fill in the customer\\'s email address first');\n  }\n  const asked = String(input.plan || 'pro').trim().toLowerCase();\n  const tier = PER_SEAT.includes(asked) ? asked : 'pro';\n  const seats = PER_SEAT.includes(tier)\n    ? Math.max(1, Math.floor(Number(input.seats)) || 1)\n    : 1;\n  const stamp = now.toISOString().slice(0, 10).replace(/-/g, '');\n  return {\n    license_key: newKey().toLowerCase(),\n    resent: false,\n    email,\n    company: PER_SEAT.includes(tier) ? String(input.company || '').trim() : '',\n    stripe_id: '',\n    // Unique, so the upsert in Save licence inserts a new row, and\n    // recognisable in the table as a hand-issued replacement.\n    session_id: `manual_${stamp}_${block(8).toLowerCase()}`,\n    plan: tier,\n    seats,\n    // A hand-issued Team licence has no subscription to renew it: it runs\n    // for the year and is extended by hand in the data table.\n    expires: tier === 'team' ? teamExpiry(now) : NEVER,\n  };\n}\n\nfunction sessionLicence(session, existing, now) {\n  // Seats come from the purchased quantity, so a promo code cannot skew the\n  // count the way dividing amount_total by the unit price would.\n  let seats = 1;\n  try {\n    const items = session.line_items && session.line_items.data;\n    if (Array.isArray(items) && items.length) {\n      seats = items.reduce((n, i) => n + (i.quantity || 0), 0) || 1;\n    }\n  } catch (e) {\n    seats = 1;\n  }\n\n  const key = existing.license_key ? String(existing.license_key) : newKey();\n  const tier = tierOf(session);\n  const details = session.customer_details || {};\n\n  // A redelivered event keeps the date the row already carries: by then a\n  // renewal may have moved it, and this must not move it back.\n  const kept = existing.license_key && existing.expires\n    ? new Date(existing.expires)\n    : null;\n  const expires = tier !== 'team'\n    ? NEVER\n    : kept && !Number.isNaN(kept.getTime())\n      ? kept.toISOString()\n      : teamExpiry(now);\n\n  return {\n    // Stored lower-case so lookups are case-insensitive; the website and the\n    // app upper-case it for display.\n    license_key: key.toLowerCase(),\n    // Whether this event had been seen before; the email is only sent once.\n    resent: !!existing.license_key,\n    email: session.customer_email || details.email || '',\n    company: PER_SEAT.includes(tier)\n      ? (details.business_name || details.name || '')\n      : '',\n    stripe_id: session.customer || '',\n    session_id: session.id,\n    plan: tier,\n    seats: PER_SEAT.includes(tier) ? seats : 1,\n    expires,\n  };\n}\n\n// --- n8n Code node entry point -------------------------------------------\n// Present only inside n8n; under `node` this falls through to the export.\nif (typeof $input !== 'undefined') {\n  const input = $input.first().json || {};\n  if (input.source === 'manual') {\n    return [{ json: manualLicence(input, new Date()) }];\n  }\n  const session = $('Re-fetch session').item.json;\n  return [{ json: sessionLicence(session, input, new Date()) }];\n}\n\nmodule.exports = {\n  manualLicence,\n  sessionLicence,\n  tierOf,\n  teamExpiry,\n  newKey,\n  NEVER,\n  TEAM_TERM_DAYS,\n  TEAM_GRACE_DAYS,\n};\n"
+      },
+      "id": "da693f3b-f3f9-4180-a51c-df6a90e3d33a",
+      "name": "Build licence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -800,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "IYaVIPxcXhAv6Ob8",
+          "mode": "list",
+          "cachedResultName": "wsl-manager-licenses"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "session_id",
+              "keyValue": "={{ $json.session_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email": "={{ $json.email }}",
+            "stripe_id": "={{ $json.stripe_id }}",
+            "active": true,
+            "license_key": "={{ $json.license_key }}",
+            "expires": "={{ $json.expires }}",
+            "is_trial": false,
+            "plan": "={{ $json.plan }}",
+            "usage": 0,
+            "session_id": "={{ $json.session_id }}",
+            "seats": "={{ $json.seats }}",
+            "company": "={{ $json.company }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "stripe_id",
+              "displayName": "stripe_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "active",
+              "displayName": "active",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "license_key",
+              "displayName": "license_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "expires",
+              "displayName": "expires",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "is_trial",
+              "displayName": "is_trial",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "plan",
+              "displayName": "plan",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "usage",
+              "displayName": "usage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "session_id",
+              "displayName": "session_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "seats",
+              "displayName": "seats",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "6a5ca15a-e5d2-4d75-9acb-b7d33befeb82",
+      "name": "Save licence",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -592,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "path": "wsl-manager/checkout",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "0be164da-2f86-4a14-aaa7-5ea34d546f68",
+      "name": "Checkout lookup",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1664,
+        592
+      ],
+      "webhookId": "0a9f5c2e-3b71-4d18-9a64-7c5e2f8b1d40"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "IYaVIPxcXhAv6Ob8",
+          "mode": "list",
+          "cachedResultName": "wsl-manager-licenses"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "session_id",
+              "keyValue": "={{ $json.query.session_id }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "id": "11c6e2f7-246e-4949-9342-a28b67a73a48",
+      "name": "Find licence",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1440,
+        592
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ !!$json.license_key }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "85fedf13-de77-42ef-b867-e8cf80d2e132",
+      "name": "Licence exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1232,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'ready', license_key: $json.license_key.toUpperCase(), email: $json.email, plan: $json.plan, seats: $json.seats, expires_at: $json.plan === 'team' ? $json.expires : null }.toJsonString() }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "0dcf1ed2-ec95-4f5b-b9b1-2c37ec9f59ed",
+      "name": "Return licence",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -992,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'pending' }.toJsonString() }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "2173cef1-8021-43a2-aceb-74d7e5843b1b",
+      "name": "Still pending",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -992,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "IYaVIPxcXhAv6Ob8",
+          "mode": "list",
+          "cachedResultName": "wsl-manager-licenses"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "session_id",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1008,
+        160
+      ],
+      "id": "d225cd5c-b812-4c88-8ca2-361ee484e236",
+      "name": "Existing licence",
+      "alwaysOutputData": true,
+      "notesInFlow": false,
+      "notes": "A Stripe retry of the same event must not mint a second key: the row for this session, if there is one, is what Build licence keeps."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Writes the licence email. Everything comes from Build licence, which read\n// the re-fetched, verified Stripe session; Save licence has just stored the\n// same row. Plain HTML with inline styles so every mail client renders it.\nfunction compose(licence) {\nconst key = String(licence.license_key || '').toUpperCase();\nconst commercial = licence.plan === 'commercial';\nconst team = licence.plan === 'team';\nconst seats = Number(licence.seats) || 1;\nconst to = String(licence.email || '').trim();\nconst sessionId = String(licence.session_id || '');\n\nconst esc = (s) => String(s).replace(/[&<>\"']/g, (c) => ({\n  '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;',\n}[c]));\n\nconst product = commercial\n  ? 'WSL Manager Commercial'\n  : team\n    ? 'WSL Manager Team'\n    : 'WSL Manager Pro';\n// A Team licence runs for the year that was billed; say until when.\nconst until = team && licence.expires && !Number.isNaN(new Date(licence.expires).getTime())\n  ? new Date(licence.expires).toISOString().slice(0, 10)\n  : '';\nconst seatText = seats === 1 ? '1 seat' : `${seats} seats`;\nconst licencePage = `https://wslmanager.com/buy/success/?session_id=${encodeURIComponent(sessionId)}`;\n\nconst intro = commercial\n  ? `Thank you for buying a commercial licence for WSL Manager — ${seatText}, perpetual, no renewal. Share the key below with your team; each person pastes it into their own install.`\n  : team\n    ? `Thank you for choosing the WSL Manager Team plan — ${seatText}, renewing every year${until ? ` (the current period runs until ${until})` : ''}. Share the key below with your team; each person pastes it into their own install, and once every seat is taken the newest activation wins.`\n    : 'Thank you for buying WSL Manager Pro. Your licence is perpetual and covers every machine you use yourself. Here is your key:';\n\nconst html = `<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Your ${esc(product)} licence key</title>\n</head>\n<body style=\"margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111827;\">\n  <div style=\"display:none;max-height:0;overflow:hidden;\">Your ${esc(product)} licence key is inside.</div>\n  <table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"background:#f3f4f6;padding:32px 16px;\">\n    <tr><td align=\"center\">\n      <table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"max-width:560px;background:#ffffff;border-radius:16px;border:1px solid #e5e7eb;overflow:hidden;\">\n        <tr><td style=\"padding:28px 32px 0 32px;\">\n          <table role=\"presentation\" cellspacing=\"0\" cellpadding=\"0\"><tr>\n            <td style=\"vertical-align:middle;\"><img src=\"https://wslmanager.com/img/logo.png\" width=\"40\" height=\"40\" alt=\"\" style=\"display:block;border-radius:10px;\"></td>\n            <td style=\"vertical-align:middle;padding-left:12px;font-size:18px;font-weight:600;color:#111827;\">WSL Manager</td>\n          </tr></table>\n        </td></tr>\n        <tr><td style=\"padding:28px 32px 0 32px;\">\n          <h1 style=\"margin:0;font-size:26px;line-height:1.25;font-weight:600;letter-spacing:-0.01em;color:#111827;\">You&rsquo;re all set</h1>\n          <p style=\"margin:14px 0 0 0;font-size:16px;line-height:1.6;color:#4b5563;\">${esc(intro)}</p>\n        </td></tr>\n        <tr><td style=\"padding:24px 32px 0 32px;\">\n          <table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;\">\n            <tr><td style=\"padding:18px 20px;\">\n              <p style=\"margin:0 0 8px 0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#6b7280;\">Your licence key</p>\n              <p style=\"margin:0;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:18px;line-height:1.5;letter-spacing:0.02em;color:#111827;word-break:break-all;\">${esc(key)}</p>\n            </td></tr>\n          </table>\n        </td></tr>\n        <tr><td style=\"padding:24px 32px 0 32px;\">\n          <p style=\"margin:0 0 10px 0;font-size:15px;font-weight:600;color:#111827;\">How to activate</p>\n          <ol style=\"margin:0;padding-left:20px;font-size:15px;line-height:1.7;color:#4b5563;\">\n            <li>Open WSL Manager on Windows or macOS.</li>\n            <li>Go to <strong style=\"color:#111827;\">Upgrade to Pro</strong> in the sidebar.</li>\n            <li>Paste the key and press <strong style=\"color:#111827;\">Activate</strong>.</li>\n          </ol>\n          <p style=\"margin:14px 0 0 0;font-size:14px;line-height:1.6;color:#6b7280;\">Bought on your Mac? Your <a href=\"${licencePage}\" style=\"color:#0891b2;text-decoration:none;font-weight:600;\">licence page</a> has an <em>Activate in WSL Manager</em> button that hands the key to the app for you.</p>\n        </td></tr>\n        <tr><td style=\"padding:28px 32px 0 32px;\">\n          <table role=\"presentation\" cellspacing=\"0\" cellpadding=\"0\"><tr>\n            <td style=\"background:#06b6d4;border-radius:10px;\">\n              <a href=\"${licencePage}\" style=\"display:inline-block;padding:12px 22px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;\">Open your licence page</a>\n            </td>\n          </tr></table>\n        </td></tr>\n        <tr><td style=\"padding:28px 32px 28px 32px;\">\n          <p style=\"margin:0;font-size:13px;line-height:1.6;color:#6b7280;\">Keep this email — it is your proof of purchase. Questions, more seats, or a lost key: reply to this email or write to <a href=\"mailto:license@bostrot.com\" style=\"color:#0891b2;text-decoration:none;\">license@bostrot.com</a>.</p>\n        </td></tr>\n      </table>\n      <p style=\"margin:18px 0 0 0;font-size:12px;line-height:1.6;color:#9ca3af;\">Sent by Eric Trenkel &middot; WSL Manager &middot; <a href=\"https://wslmanager.com\" style=\"color:#9ca3af;text-decoration:none;\">wslmanager.com</a></p>\n    </td></tr>\n  </table>\n</body>\n</html>`;\n\nconst text = [\n  `Thank you for buying ${product}${commercial ? ` (${seatText})` : ''}${team ? ` (${seatText}, renews yearly${until ? `, current period until ${until}` : ''})` : ''}.`,\n  '',\n  `Your licence key: ${key}`,\n  '',\n  'How to activate: open WSL Manager, go to \"Upgrade to Pro\" in the sidebar, paste the key and press Activate.',\n  `Your licence page: ${licencePage}`,\n  '',\n  'Keep this email as your proof of purchase. Questions or a lost key: license@bostrot.com',\n].join('\\n');\n\nreturn {\n  to,\n  subject: `Your ${product} licence key`,\n  html,\n  text,\n  // Nothing to send to; the row is saved and the licence page still works.\n  skip: !to || licence.resent === true,\n};\n}\n\n// --- n8n Code node entry point -------------------------------------------\n// Present only inside n8n; under `node` this falls through to the export.\nif (typeof $input !== 'undefined') {\n  return [{ json: compose($('Build licence').item.json) }];\n}\n\nmodule.exports = { compose };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -384,
+        160
+      ],
+      "id": "3af39731-5d58-434c-a698-09a2b55f3c24",
+      "name": "Compose licence email",
+      "notesInFlow": false,
+      "notes": "Builds the HTML and plain-text licence email from the verified session. Sets skip when there is no address or the event is a Stripe retry."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "s1",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": "false",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -176,
+        160
+      ],
+      "id": "7fe9d45c-1571-4f7b-b2bb-994b1c6bbde3",
+      "name": "Send it?"
+    },
+    {
+      "parameters": {
+        "fromEmail": "Eric from WSL Manager <eric@bostrot.com>",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "both",
+        "text": "={{ $json.text }}",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false,
+          "replyTo": "license@bostrot.com"
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        32,
+        64
+      ],
+      "id": "a673b945-425d-437b-8527-1893acd5c153",
+      "name": "Send licence email",
+      "notesInFlow": false,
+      "webhookId": "0e5ad704-bc0d-41c2-9f1e-bd752f8d4ec5",
+      "credentials": {
+        "smtp": {
+          "id": "6Al7qoq3cTMXlrHX",
+          "name": "Protonmail Bostrot"
+        }
+      },
+      "notes": "The licence key by email, from the Proton account. The page still shows the key whether or not this goes out."
+    },
+    {
+      "parameters": {},
+      "id": "manual-trigger-replacement-key",
+      "name": "Manual: replacement key",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        -96
+      ],
+      "notesInFlow": true,
+      "notes": "Someone wrote in with an old licence and needs a fresh key: fill in \"Manual request\", then run this trigger. A new key is minted, saved to the licence table and emailed to them."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m-source",
+              "name": "source",
+              "value": "manual",
+              "type": "string"
+            },
+            {
+              "id": "m-email",
+              "name": "email",
+              "value": "customer@example.com",
+              "type": "string"
+            },
+            {
+              "id": "m-plan",
+              "name": "plan",
+              "value": "pro",
+              "type": "string"
+            },
+            {
+              "id": "m-seats",
+              "name": "seats",
+              "value": 1,
+              "type": "number"
+            },
+            {
+              "id": "m-company",
+              "name": "company",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "manual-request-fields",
+      "name": "Manual request",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1008,
+        -96
+      ],
+      "notesInFlow": true,
+      "notes": "Edit before running: email (required), plan = pro | commercial, seats and company only matter for commercial. Leave source = manual."
+    },
+    {
+      "id": "b807ea02-edf6-4458-a42f-429cc6d17057",
+      "name": "Event type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -1664,
+        256
+      ],
+      "notes": "A checkout mints a licence. A paid subscription invoice or an ended subscription changes a Team row. Anything else Stripe sends stops here.",
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "checkout-0",
+                    "leftValue": "={{ $json.body.type }}",
+                    "rightValue": "checkout.session.completed",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "id": "checkout-1",
+                    "leftValue": "={{ $json.body.type }}",
+                    "rightValue": "checkout.session.async_payment_succeeded",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "checkout"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "subscription-0",
+                    "leftValue": "={{ $json.body.type }}",
+                    "rightValue": "invoice.paid",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "id": "subscription-1",
+                    "leftValue": "={{ $json.body.type }}",
+                    "rightValue": "customer.subscription.deleted",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "subscription"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c53c3dd7-80f2-4c4e-aaca-9817be25c4d9",
+      "name": "Re-fetch object",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1440,
+        880
+      ],
+      "credentials": {
+        "stripeApi": {
+          "id": "YgOHiL5LMVAGtRJ2",
+          "name": "Stripe PROD account"
+        }
+      },
+      "notes": "As with the session: the posted event is not trusted, the invoice or subscription is read back from Stripe.",
+      "parameters": {
+        "url": "=https://api.stripe.com/v1/{{ $json.body.type.startsWith('invoice.') ? 'invoices' : 'subscriptions' }}/{{ $json.body.data.object.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "stripeApi",
+        "options": {}
+      }
+    },
+    {
+      "id": "97c8226e-82bf-4c1a-b0c9-5a585fa53499",
+      "name": "Team rows",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1232,
+        880
+      ],
+      "alwaysOutputData": true,
+      "notes": "Every licence this Stripe customer holds; Team change picks the Team ones.",
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "IYaVIPxcXhAv6Ob8",
+          "mode": "list",
+          "cachedResultName": "wsl-manager-licenses"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "stripe_id",
+              "keyValue": "={{ $json.customer }}"
+            }
+          ]
+        },
+        "returnAll": true
+      }
+    },
+    {
+      "id": "3df70ede-6449-446d-a5b5-b84f8cef0156",
+      "name": "Team change",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1008,
+        880
+      ],
+      "parameters": {
+        "jsCode": "// What a Team subscription's later life does to its licence row.\n//\n// Two Stripe events reach this node, both re-fetched from the Stripe API by\n// the node before the last (the posted payload is never trusted):\n//\n//   invoice.paid                   the subscription was billed for another\n//                                  year: the row runs until that period\n//                                  ends, plus the grace, and is active again\n//                                  if it had lapsed.\n//   customer.subscription.deleted  the subscription is over: the row stops\n//                                  validating.\n//\n// A renewal that *fails* sends nothing here and needs nothing done: the row\n// keeps the date its last paid invoice set and lapses on its own once Stripe\n// has given up retrying the card.\n//\n// The rows are the customer's (the node before this one fetched them by\n// `stripe_id`), and only the ones whose plan is `team` are ever touched — a\n// Pro or Commercial key the same customer bought is perpetual and stays so.\n// The licence table has no subscription column, so a customer with two Team\n// subscriptions has both rows follow either one; that is what the licence\n// server (wslmanager-license) fixes, and why this is the interim.\n\n// Same grace as \"Build licence\": longer than Stripe retries a failed card.\nconst TEAM_GRACE_DAYS = 14;\n\nconst NONE = { action: 'none' };\n\nfunction customerOf(object) {\n  const c = object.customer;\n  if (typeof c === 'string') return c;\n  return c && typeof c.id === 'string' ? c.id : '';\n}\n\n// The subscription an invoice bills, wherever the API version put it.\nfunction subscriptionOf(invoice) {\n  const parent = invoice.parent && invoice.parent.subscription_details;\n  const sub = invoice.subscription || (parent && parent.subscription);\n  if (typeof sub === 'string') return sub;\n  return sub && typeof sub.id === 'string' ? sub.id : '';\n}\n\n/**\n * What a re-fetched Stripe object asks for: `renew` until a date, `cancel`,\n * or nothing.\n */\nfunction decide(object) {\n  if (!object || typeof object !== 'object') return NONE;\n  const customer = customerOf(object);\n  if (!customer) return NONE;\n\n  if (object.object === 'invoice') {\n    // A one-off invoice (a Commercial purchase sends one too) renews nothing.\n    if (object.status !== 'paid' || !subscriptionOf(object)) return NONE;\n    const lines = (object.lines && object.lines.data) || [];\n    const ends = (Array.isArray(lines) ? lines : [])\n      .map((l) => l && l.period && Number(l.period.end))\n      .filter((n) => Number.isFinite(n) && n > 0);\n    if (!ends.length) return NONE;\n    const until = new Date(\n      (Math.max(...ends) + TEAM_GRACE_DAYS * 86400) * 1000\n    ).toISOString();\n    return { action: 'renew', customer, until };\n  }\n\n  if (object.object === 'subscription') {\n    if (object.status !== 'canceled') return NONE;\n    return { action: 'cancel', customer };\n  }\n\n  return NONE;\n}\n\nfunction iso(value) {\n  const d = new Date(value);\n  return Number.isNaN(d.getTime()) ? null : d.toISOString();\n}\n\n/**\n * The updates to write: one per Team row, as `{row_id, active, expires}`.\n * A renewal never moves a date backwards — an invoice for a short period\n * (a proration, a seat added mid-year) must not cut the year short.\n */\nfunction changes(rows, decision) {\n  if (!decision || decision.action === 'none') return [];\n  return (Array.isArray(rows) ? rows : [])\n    .filter((r) => r && r.id !== undefined && r.id !== null)\n    .filter((r) => String(r.plan || '').toLowerCase() === 'team')\n    .filter((r) => !decision.customer || r.stripe_id === decision.customer)\n    .map((r) => {\n      const current = iso(r.expires);\n      if (decision.action === 'cancel') {\n        return { row_id: r.id, active: false, expires: current || decision.until || new Date(0).toISOString() };\n      }\n      const later = current && current > decision.until ? current : decision.until;\n      return { row_id: r.id, active: true, expires: later };\n    });\n}\n\n// --- n8n Code node entry point -------------------------------------------\n// Present only inside n8n; under `node` this falls through to the export.\nif (typeof $input !== 'undefined') {\n  const object = $('Re-fetch object').first().json || {};\n  const rows = $input.all().map((i) => i.json || {});\n  return changes(rows, decide(object)).map((json) => ({ json }));\n}\n\nmodule.exports = { decide, changes, subscriptionOf, TEAM_GRACE_DAYS };\n"
+      }
+    },
+    {
+      "id": "fb5ea82c-a9c3-414b-8a4a-ed4be25bba7f",
+      "name": "Apply team change",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -800,
+        880
+      ],
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "IYaVIPxcXhAv6Ob8",
+          "mode": "list",
+          "cachedResultName": "wsl-manager-licenses"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.row_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "active": "={{ $json.active }}",
+            "expires": "={{ $json.expires }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "active",
+              "displayName": "active",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "expires",
+              "displayName": "expires",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Stripe events": {
+      "main": [
+        [
+          {
+            "node": "Event type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Re-fetch session": {
+      "main": [
+        [
+          {
+            "node": "Actually paid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actually paid": {
+      "main": [
+        [
+          {
+            "node": "Existing licence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build licence": {
+      "main": [
+        [
+          {
+            "node": "Save licence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Checkout lookup": {
+      "main": [
+        [
+          {
+            "node": "Find licence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find licence": {
+      "main": [
+        [
+          {
+            "node": "Licence exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Licence exists": {
+      "main": [
+        [
+          {
+            "node": "Return licence",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Still pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Existing licence": {
+      "main": [
+        [
+          {
+            "node": "Build licence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save licence": {
+      "main": [
+        [
+          {
+            "node": "Compose licence email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose licence email": {
+      "main": [
+        [
+          {
+            "node": "Send it?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send it?": {
+      "main": [
+        [
+          {
+            "node": "Send licence email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual: replacement key": {
+      "main": [
+        [
+          {
+            "node": "Manual request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual request": {
+      "main": [
+        [
+          {
+            "node": "Build licence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Event type": {
+      "main": [
+        [
+          {
+            "node": "Re-fetch session",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Re-fetch object",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Re-fetch object": {
+      "main": [
+        [
+          {
+            "node": "Team rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Team rows": {
+      "main": [
+        [
+          {
+            "node": "Team change",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Team change": {
+      "main": [
+        [
+          {
+            "node": "Apply team change",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

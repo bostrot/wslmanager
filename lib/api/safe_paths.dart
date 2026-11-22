@@ -95,7 +95,7 @@ class SafePath {
     if (isFile) {
       return _path;
     } else {
-      return File('$_path\\$name').path;
+      return File('$_path${Platform.pathSeparator}$name').path;
     }
   }
 
@@ -107,7 +107,7 @@ class SafePath {
     if (isFile) {
       // Do nothing
     } else {
-      String path = '$_path\\$name';
+      String path = '$_path${Platform.pathSeparator}$name';
       // Check if path exists
       Directory dir = Directory(path);
       bool dirExists = false;

@@ -2,10 +2,39 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:localization/localization.dart';
 import 'package:path/path.dart' as p;
+import 'package:wsl2distromanager/api/remote_target.dart';
+import 'package:wsl2distromanager/api/execution/broker.dart';
+import 'package:wsl2distromanager/api/execution/models.dart';
 import 'package:wsl2distromanager/api/shell.dart';
 import 'package:wsl2distromanager/api/wsl.dart';
+import 'package:wsl2distromanager/api/wsl_errors.dart';
 import 'package:wsl2distromanager/components/helpers.dart';
 import 'package:wsl2distromanager/components/logging.dart';
+
+/// Adapter unifying ExecutionResult (broker) and ProcessResult (shell).
+class _ShellResult {
+  final int exitCode;
+  final dynamic stdout;
+  final dynamic stderr;
+
+  const _ShellResult({required this.exitCode, this.stdout, this.stderr});
+
+  factory _ShellResult.fromExecution(ExecutionResult result) {
+    return _ShellResult(
+      exitCode: result.exitCode,
+      stdout: result.stdout,
+      stderr: result.stderr,
+    );
+  }
+
+  factory _ShellResult.fromProcess(ProcessResult result) {
+    return _ShellResult(
+      exitCode: result.exitCode,
+      stdout: result.stdout,
+      stderr: result.stderr,
+    );
+  }
+}
 
 class PhysicalDisk {
   final String deviceId; // e.g. \\.\PHYSICALDRIVE1
@@ -32,22 +61,123 @@ class PhysicalDisk {
 
 class MountService {
   final Shell shell;
+  final ExecutionBroker? _broker;
 
-  MountService({Shell? shell}) : shell = shell ?? ProcessShell();
+  MountService({Shell? shell, ExecutionBroker? broker})
+      : shell = shell ?? ProcessShell(),
+        _broker = broker;
+
+  bool get _useRemoteWsl {
+    final enabled = prefs.getBool('UseRemoteWSL') ?? false;
+    final target = prefs.getString('RemoteWSLTarget')?.trim() ?? '';
+    return enabled && isValidRemoteTarget(target);
+  }
+
+  String get _remoteTarget {
+    return prefs.getString('RemoteWSLTarget')?.trim() ?? '';
+  }
+
+  /// Same contract as `WSLApi._buildRemoteArgs`: the command goes through
+  /// [sshRemoteCommand] so the host's login shell — cmd.exe, PowerShell or
+  /// bash — cannot take it apart. See lib/api/remote_command.dart.
+  List<String> _buildRemoteArgs(String executable, List<String> args) =>
+      sshRemoteCommand(_remoteTarget, executable, args);
+
+  List<String> _buildRemotePowerShell(String script) =>
+      sshRemotePowerShell(_remoteTarget, script);
+
+  Future<_ShellResult> _runHostPowershell(String script) async {
+    if (_useRemoteWsl) {
+      if (_broker != null) {
+        final result = await _broker!.run(ExecutionRequest(
+          command: 'ssh',
+          arguments: _buildRemotePowerShell(script),
+          runInShell: false,
+        ));
+        return _ShellResult.fromExecution(result);
+      } else {
+        final result = await shell.run(
+          'ssh',
+          _buildRemotePowerShell(script),
+          runInShell: false,
+          stdoutEncoding: null,
+          stderrEncoding: null,
+        );
+        return _ShellResult.fromProcess(result);
+      }
+    }
+
+    if (!Platform.isWindows) {
+      throw Exception(
+          'Physical disk operations require Windows host or remote WSL mode.');
+    }
+
+    if (_broker != null) {
+      final result = await _broker!.run(ExecutionRequest(
+        command: 'powershell',
+        arguments: ['-NoProfile', '-Command', script],
+      ));
+      return _ShellResult.fromExecution(result);
+    } else {
+      final result =
+          await shell.run('powershell', ['-NoProfile', '-Command', script]);
+      return _ShellResult.fromProcess(result);
+    }
+  }
+
+  String _safeProcessText(dynamic output) {
+    if (output is List<int>) {
+      return WSLApi().utf8Convert(output);
+    }
+    return output?.toString() ?? '';
+  }
+
+  Future<_ShellResult> _runWslHost(List<String> args) async {
+    if (_useRemoteWsl) {
+      if (_broker != null) {
+        final result = await _broker!.run(ExecutionRequest(
+          command: 'ssh',
+          arguments: _buildRemoteArgs('wsl', args),
+          runInShell: false,
+        ));
+        return _ShellResult.fromExecution(result);
+      } else {
+        final result = await shell.run(
+          'ssh',
+          _buildRemoteArgs('wsl', args),
+          runInShell: false,
+        );
+        return _ShellResult.fromProcess(result);
+      }
+    }
+
+    if (!Platform.isWindows) {
+      throw Exception('WSL mount operations require Windows host or remote WSL mode.');
+    }
+
+    if (_broker != null) {
+      final result = await _broker!.run(ExecutionRequest(
+        command: 'wsl',
+        arguments: args,
+      ));
+      return _ShellResult.fromExecution(result);
+    } else {
+      final result = await shell.run('wsl', args);
+      return _ShellResult.fromProcess(result);
+    }
+  }
 
   Future<List<PhysicalDisk>> getPhysicalDisks() async {
     try {
-      var result = await shell.run('powershell', [
-        '-NoProfile',
-        '-Command',
-        'Get-CimInstance -ClassName Win32_DiskDrive | Select-Object DeviceID, Model, Size, Index, InterfaceType, MediaType | ConvertTo-Json'
-      ]);
+      var result = await _runHostPowershell(
+          'Get-CimInstance -ClassName Win32_DiskDrive | Select-Object DeviceID, Model, Size, Index, InterfaceType, MediaType | ConvertTo-Json');
 
       if (result.exitCode != 0) {
-        throw Exception('failedtolistdisks-text'.i18n([result.stderr.toString()]));
+        throw Exception(
+            'failedtolistdisks-text'.i18n([_safeProcessText(result.stderr)]));
       }
 
-      String output = result.stdout.toString().trim();
+      String output = _safeProcessText(result.stdout).trim();
       if (output.isEmpty) return [];
 
       var json = jsonDecode(output);
@@ -95,6 +225,31 @@ class MountService {
       }
     }
 
+    if (_useRemoteWsl) {
+      final wslArgs = ['--mount', diskPath];
+      if (bare) {
+        wslArgs.add('--bare');
+      } else {
+        if (name != null && name.isNotEmpty) {
+          wslArgs.addAll(['--name', name]);
+        }
+        if (partition != null && partition.isNotEmpty) {
+          wslArgs.addAll(['--partition', partition]);
+        }
+        if (type != null && type.isNotEmpty) {
+          wslArgs.addAll(['--type', type]);
+        }
+        if (options != null && options.isNotEmpty) {
+          wslArgs.addAll(['--options', options]);
+        }
+      }
+      final result = await _runWslHost(wslArgs);
+      if (result.exitCode != 0) {
+        throw WslFailure.fromStreams(result.stdout, result.stderr);
+      }
+      return;
+    }
+
     await _runAsAdmin('wsl', args);
   }
 
@@ -139,7 +294,10 @@ class MountService {
       }
     }
 
-    await shell.run('wsl', args);
+    final result = await _runWslHost(args);
+    if (result.exitCode != 0) {
+      throw WslFailure.fromStreams(result.stdout, result.stderr);
+    }
     await prefs.setString('mount_vhd_$safeName', windowsPath);
   }
 
@@ -150,10 +308,10 @@ class MountService {
       windowsPath = windowsPath.substring(4);
     }
 
-    var result = await shell.run('wsl', ['--unmount', windowsPath]);
+    var result = await _runWslHost(['--unmount', windowsPath]);
 
     if (result.exitCode != 0) {
-      throw Exception(result.stderr.toString().trim());
+      throw WslFailure.fromStreams(result.stdout, result.stderr);
     }
 
     // If successful, clean up prefs just in case
@@ -178,6 +336,10 @@ class MountService {
   }
 
   Future<void> _runAsAdmin(String exe, String args) async {
+    if (!Platform.isWindows) {
+      throw Exception('Admin mount operations are only available on Windows hosts.');
+    }
+
     final tempDir = Directory.systemTemp;
     final logFile = File('${tempDir.path}\\wsl_mount_log.txt');
     final exitCodeFile = File('${tempDir.path}\\wsl_mount_exit.txt');
@@ -203,18 +365,35 @@ if %errorlevel% neq 0 (
 ''';
     await batFile.writeAsString(batContent);
 
-    var result = await shell.run('powershell', [
-      'Start-Process',
-      '"${batFile.path}"',
-      '-Verb',
-      'RunAs',
-      '-WindowStyle',
-      'Hidden',
-      '-Wait'
-    ]);
-
-    if (result.exitCode != 0) {
-      throw Exception('failedtolaunchadmin-text'.i18n([result.stderr.toString()]));
+    if (_broker != null) {
+      final result = await _broker!.run(ExecutionRequest(
+        command: 'powershell',
+        arguments: [
+          'Start-Process',
+          '"${batFile.path}"',
+          '-Verb',
+          'RunAs',
+          '-WindowStyle',
+          'Hidden',
+          '-Wait'
+        ],
+      ));
+      if (result.exitCode != 0) {
+        throw Exception('failedtolaunchadmin-text'.i18n([result.stderr]));
+      }
+    } else {
+      final result = await shell.run('powershell', [
+        'Start-Process',
+        '"${batFile.path}"',
+        '-Verb',
+        'RunAs',
+        '-WindowStyle',
+        'Hidden',
+        '-Wait'
+      ]);
+      if (result.exitCode != 0) {
+        throw Exception('failedtolaunchadmin-text'.i18n([result.stderr.toString()]));
+      }
     }
 
     // Check exit code file
@@ -245,7 +424,7 @@ if %errorlevel% neq 0 (
       if (output.isEmpty) {
         output = 'unknownmounterror-text'.i18n();
       }
-      throw Exception(output);
+      throw WslFailure.fromText(output);
     }
   }
 }

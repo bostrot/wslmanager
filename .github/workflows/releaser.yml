@@ -17,9 +17,20 @@ on:
       - 'LICENSE'
       - 'pubspec.yaml'
 
+# Windows Arm64 engine artifacts exist only from Flutter 3.44.0 on, so the
+# 3.41.6 the x64 release is pinned to cannot produce that build at all. The two
+# pins are therefore deliberately different: the x64 app keeps shipping from the
+# version that has been shipping it, and the Arm64 app uses the oldest release
+# that can build it. Bump either one on its own, after a local build.
+env:
+  FLUTTER_ARM64_VERSION: '3.44.9'
+
 jobs:
   build:
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+      exists: ${{ steps.get_version.outputs.exists }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,7 +50,7 @@ jobs:
           $wsl2_manager_version = $versionMatch.Groups[1].Value
           # Make web REST call to check if release already exists
           Try {
-            $result = $(Invoke-RestMethod -Uri https://api.github.com/repos/bostrot/wsl2-distro-manager/releases/tags/v$wsl2_manager_version)
+            $result = $(Invoke-RestMethod -Uri https://api.github.com/repos/bostrot/wslmanager/releases/tags/v$wsl2_manager_version)
           } Catch {
             $result = $false
           }
@@ -58,19 +69,35 @@ jobs:
       - name: Replace version in pubspec.yaml for msix
         run: |
           (Get-Content .\pubspec.yaml) -replace('msix_version: (.*)', 'msix_version: ${{ steps.get_version.outputs.version }}.0') | Set-Content .\pubspec.yaml
+      # Pin the SDK — see the note in test.yml. Release builds must not
+      # change underneath us between runs.
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          flutter-version: '3.41.6'
+
+      - name: Check translations
+        run: dart run scripts/check_translations.dart
+
       - run: flutter config --enable-windows-desktop
-      - run: flutter build windows
+      # WSLMANAGER_GITHUB_CLIENT_ID is an optional repository *variable*, not
+      # a secret: the OAuth client id for snippet sharing is public. It
+      # overrides the id bundled in lib/api/github_publish.dart; unset, the
+      # bundled id ships. See doc/github-oauth-setup.md.
+      - run: flutter build windows --dart-define=GITHUB_CLIENT_ID=${{ vars.WSLMANAGER_GITHUB_CLIENT_ID }}
       - run: dart run msix:create
 
       - name: Prepare installer inputs
         shell: pwsh
         run: |
+          # Pinned to an immutable commit, not 'master': upstream edits the
+          # file in place, which silently invalidates the checksum below and
+          # breaks the release (it did, on 2026-08-21). Bump the ref and the
+          # hash together, deliberately.
+          $codeDependenciesRef = '7ab4aac42af899d9836715bdd4a292c5cd087024'
           $codeDependenciesPath = Join-Path $PWD 'installer\CodeDependencies.iss'
-          $codeDependenciesUrl = 'https://raw.githubusercontent.com/DomGries/InnoDependencyInstaller/master/CodeDependencies.iss'
-          $codeDependenciesSha256 = 'D57E218B36CB77D7A83F0558B3C13C391585AEA92F560CF9FDFEDBC87FAE5D10'
+          $codeDependenciesUrl = "https://raw.githubusercontent.com/DomGries/InnoDependencyInstaller/$codeDependenciesRef/CodeDependencies.iss"
+          $codeDependenciesSha256 = '0EF2A8E1924EEDD5D96B5BDBA3774E7A14024F16954D66DA06F3FD53DC3161F4'
 
           if (-not (Test-Path $codeDependenciesPath)) {
             Write-Host 'Downloading CodeDependencies.iss for InnoDependencyInstaller...'
@@ -188,17 +215,167 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
-      - name: Trigger publish workflows
-        if: ${{ steps.get_version.outputs.exists == 'false' && github.ref == 'refs/heads/main' }}
+  # There is no cross compile for Windows: `flutter build windows` targets the
+  # architecture of the Dart executable running it, so the Arm64 app has to be
+  # built on an Arm64 runner. It runs after the x64 job because it attaches its
+  # assets to the release that job creates.
+  build-arm64:
+    needs: build
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          clean: true
+          persist-credentials: true
+          set-safe-directory: true
+
+      - name: Replace version in constants.dart
+        run: |
+          (Get-Content .\lib\components\constants.dart) -replace('currentVersion.*', 'currentVersion = "${{ needs.build.outputs.version }}";') | Set-Content .\lib\components\constants.dart
+      - name: Replace version in pubspec.yaml for msix
+        run: |
+          (Get-Content .\pubspec.yaml) -replace('msix_version: (.*)', 'msix_version: ${{ needs.build.outputs.version }}.0') | Set-Content .\pubspec.yaml
+
+      # subosito/flutter-action cannot be used here, and the way it fails is a
+      # trap. Flutter publishes no Arm64 SDK *archive* for Windows —
+      # releases_windows.json carries x64 entries only — and the action resolves
+      # strictly on that manifest, so on this runner it exits with "Unable to
+      # determine Flutter version ... architecture: arm64". The obvious fix for
+      # that error is `architecture: x64`, which installs the emulated SDK and
+      # silently produces an x64 app under an Arm64 filename, because
+      # `flutter build windows` picks its target from the host alone (see the
+      # PE check below). Cloning the SDK runs bin/internal/update_dart_sdk.ps1
+      # instead, which fetches the native Arm64 Dart SDK when
+      # PROCESSOR_ARCHITECTURE says ARM64: "it's important to use the native
+      # Dart SDK as the default target architecture for Flutter Windows builds
+      # depend on the Dart executable's architecture", in its own words.
+      - name: Install Flutter (native Arm64)
         shell: pwsh
         run: |
-          $tag = "v${{ steps.get_version.outputs.version }}"
-          Start-Sleep -Seconds 5
+          git clone --depth 1 --branch $env:FLUTTER_ARM64_VERSION https://github.com/flutter/flutter.git "$env:RUNNER_TEMP\flutter"
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:RUNNER_TEMP\flutter\bin"
+      - name: Report the SDK that will do the building
+        shell: pwsh
+        run: |
+          flutter --version
+          dart --version
 
-          gh workflow run publish-winget.yml -f tag=$tag
-          gh workflow run publish-scoop.yml -f tag=$tag
-          gh workflow run publish-store.yml -f tag=$tag
+      # No translation check here: `needs: build` already ran it, on the same
+      # commit.
+      - run: flutter config --enable-windows-desktop
+      - run: flutter build windows --dart-define=GITHUB_CLIENT_ID=${{ vars.WSLMANAGER_GITHUB_CLIENT_ID }}
+
+      # `flutter build windows` has no --target-platform and no override: it
+      # reads HostPlatform and nothing else (build_windows.dart), so the only
+      # thing standing between a correct SDK and a mislabelled x64 release is
+      # this assertion. Every later step would succeed either way, so it runs
+      # before anything is packaged or uploaded.
+      - name: Verify the binary is Arm64
+        run: dart run scripts/check_pe_architecture.dart build\windows\arm64\runner\Release\wsl2distromanager.exe arm64
+
+      - run: dart run msix:create --architecture arm64
+
+      - name: Prepare installer inputs
+        shell: pwsh
+        run: |
+          # Same pinned commit and checksum as the x64 job; bump them together.
+          $codeDependenciesRef = '7ab4aac42af899d9836715bdd4a292c5cd087024'
+          $codeDependenciesPath = Join-Path $PWD 'installer\CodeDependencies.iss'
+          $codeDependenciesUrl = "https://raw.githubusercontent.com/DomGries/InnoDependencyInstaller/$codeDependenciesRef/CodeDependencies.iss"
+          $codeDependenciesSha256 = '0EF2A8E1924EEDD5D96B5BDBA3774E7A14024F16954D66DA06F3FD53DC3161F4'
+
+          if (-not (Test-Path $codeDependenciesPath)) {
+            Write-Host 'Downloading CodeDependencies.iss for InnoDependencyInstaller...'
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            Invoke-WebRequest -Uri $codeDependenciesUrl -OutFile $codeDependenciesPath
+          }
+
+          $actualCodeDependenciesSha256 = (Get-FileHash $codeDependenciesPath -Algorithm SHA256).Hash.ToUpperInvariant()
+          if ($actualCodeDependenciesSha256 -ne $codeDependenciesSha256) {
+            throw "CodeDependencies.iss checksum mismatch. Expected $codeDependenciesSha256 but got $actualCodeDependenciesSha256"
+          }
+
+          .\installer\stage-payload.ps1 -Architecture arm64
+
+      - name: Build installer (Inno Setup Action)
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.7
+        with:
+          path: installer/setup.iss
+          options: |
+            /DAppVersion=${{ needs.build.outputs.version }}
+            /DTargetArch=arm64
+
+      - name: Name the Arm64 artifacts
+        shell: pwsh
+        run: |
+          $version = "${{ needs.build.outputs.version }}"
+          Copy-Item ".\build\windows\arm64\runner\Release\wsl2distromanager.msix" ".\wsl2-distro-manager-v$version-arm64-unsigned.msix" -Force
+          Copy-Item ".\installer\wsl2-distro-manager-setup-arm64.exe" ".\wsl2-distro-manager-v$version-arm64-setup.exe" -Force
+          Compress-Archive -Path ./build/windows/arm64/runner/Release/* -DestinationPath ".\wsl2-distro-manager-v$version-arm64.zip" -Force
+
+      - uses: actions/upload-artifact@v4
+        name: Create nightly release (Arm64 ZIP)
+        with:
+          name: wsl2-distro-manager-nightly-arm64-archive
+          path: ./wsl2-distro-manager-v${{ needs.build.outputs.version }}-arm64.zip
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
+          overwrite: true
+
+      - uses: actions/upload-artifact@v4
+        name: Create nightly release (Arm64 MSIX)
+        with:
+          name: wsl2-distro-manager-nightly-arm64-msix
+          path: ./wsl2-distro-manager-v${{ needs.build.outputs.version }}-arm64-unsigned.msix
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
+          overwrite: true
+
+      - uses: actions/upload-artifact@v4
+        name: Create nightly release (Arm64 Setup EXE)
+        with:
+          name: wsl2-distro-manager-nightly-arm64-setup
+          path: ./wsl2-distro-manager-v${{ needs.build.outputs.version }}-arm64-setup.exe
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
+          overwrite: true
+
+      # Only onto the release this run just created, and never with --clobber:
+      # re-uploading an asset under a tag that is already published changes the
+      # bytes under WinGet's and Homebrew's recorded checksums, which is how
+      # 2.0.2 and 2.3.0 broke. A later build of the same version stays a nightly
+      # artifact.
+      - name: Attach to the release
+        if: ${{ needs.build.outputs.exists == 'false' && github.ref == 'refs/heads/main' }}
+        shell: pwsh
+        run: |
+          $version = "${{ needs.build.outputs.version }}"
+          gh release upload "v$version" `
+            ".\wsl2-distro-manager-v$version-arm64.zip" `
+            ".\wsl2-distro-manager-v$version-arm64-unsigned.msix" `
+            ".\wsl2-distro-manager-v$version-arm64-setup.exe"
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
-      
+  # Separate from the build jobs so the WinGet manifest is generated once both
+  # installers are on the release — and so a failed or unavailable Arm64 runner
+  # still publishes the x64 build rather than holding the release back.
+  publish:
+    needs: [build, build-arm64]
+    if: ${{ always() && needs.build.result == 'success' && needs.build.outputs.exists == 'false' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger publish workflows
+        shell: bash
+        run: |
+          tag="v${{ needs.build.outputs.version }}"
+          sleep 5
+
+          gh workflow run publish-winget.yml -f tag="$tag" --repo "$GITHUB_REPOSITORY"
+          gh workflow run publish-store.yml -f tag="$tag" --repo "$GITHUB_REPOSITORY"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

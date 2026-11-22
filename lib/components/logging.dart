@@ -4,20 +4,37 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:wsl2distromanager/api/safe_paths.dart';
 import 'package:wsl2distromanager/components/analytics.dart';
 import 'package:wsl2distromanager/components/constants.dart';
 
 /// Get log file path
 String getLogFilePath() {
-  return (SafePath(Platform.environment['APPDATA']!)
-        ..cd('com.bostrot')
-        ..cd('WSL Distro Manager'))
-      .file('wslmanager_01.log');
+  final env = Platform.environment;
+  late final String baseDir;
+
+  if (Platform.isWindows) {
+    baseDir = env['APPDATA'] ??
+        '${env['USERPROFILE'] ?? Directory.current.path}\\AppData\\Roaming';
+  } else if (Platform.isLinux) {
+    final home = env['HOME'] ?? Directory.current.path;
+    baseDir = env['XDG_STATE_HOME'] ?? '$home/.local/state';
+  } else if (Platform.isMacOS) {
+    final home = env['HOME'] ?? Directory.current.path;
+    baseDir = '$home/Library/Logs';
+  } else {
+    baseDir = Directory.current.path;
+  }
+
+  final logsDir = Directory(
+      '$baseDir${Platform.pathSeparator}com.bostrot${Platform.pathSeparator}WSL Distro Manager');
+  if (!logsDir.existsSync()) {
+    logsDir.createSync(recursive: true);
+  }
+  return '${logsDir.path}${Platform.pathSeparator}wslmanager_01.log';
 }
 
 /// Initialize logging
-void initLogging() async {
+Future<void> initLogging() async {
   // Log file
   var logfile = File(getLogFilePath());
   // Delete if file is larger than 1MB

@@ -57,7 +57,7 @@ void main() {
     ];
 
     adapter.responses[
-            'https://api.github.com/repos/bostrot/wsl2-distro-manager/releases'] =
+            'https://api.github.com/repos/bostrot/wslmanager/releases'] =
         ResponseBody.fromString(jsonEncode(updateResponse), 200, headers: {
       Headers.contentTypeHeader: [Headers.jsonContentType],
     });
@@ -77,7 +77,7 @@ void main() {
     ];
 
     adapter.responses[
-            'https://api.github.com/repos/bostrot/wsl2-distro-manager/releases'] =
+            'https://api.github.com/repos/bostrot/wslmanager/releases'] =
         ResponseBody.fromString(jsonEncode(updateResponse), 200, headers: {
       Headers.contentTypeHeader: [Headers.jsonContentType],
     });
@@ -90,7 +90,7 @@ void main() {
     final motdResponse = {'motd': 'Hello World'};
 
     adapter.responses[
-            'https://raw.githubusercontent.com/bostrot/wsl2-distro-manager/main/motd.json'] =
+            'https://raw.githubusercontent.com/bostrot/wslmanager/main/motd.json'] =
         ResponseBody.fromString(jsonEncode(motdResponse), 200, headers: {
       Headers.contentTypeHeader: [Headers.textPlainContentType],
     });

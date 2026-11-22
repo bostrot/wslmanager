@@ -18,17 +18,6 @@ class ArchiveService {
 class ArchiveApi {
   static const _exe = './7zip/7za.exe';
 
-  /// Get current path
-  static Future<String> get currentPath async {
-    // Get current path
-    try {
-      final result = await Process.run("cmd", ["/c", "cd"], runInShell: true);
-      return result.stdout.toString();
-    } catch (e) {
-      throw Exception('Failed to get current path: $e');
-    }
-  }
-
   /// Extracts the archive at [archivePath] to [destinationPath]
   static Future<void> extract(
       String archivePath, String destinationPath) async {

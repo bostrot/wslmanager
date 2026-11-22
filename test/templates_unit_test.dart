@@ -14,7 +14,11 @@ class MockWSLApi implements WSLApi {
   bool throwOnImport = false;
 
   @override
-  Future<String> export(String distroName, String path) async {
+  String get templateExtension => 'ext4';
+
+  @override
+  Future<String> export(String distroName, String path,
+      {String? format}) async {
     // Create dummy file
     File(path).createSync(recursive: true);
     return '';
@@ -41,7 +45,9 @@ class MockPlausible implements Plausible {
       {String? name,
       String? page,
       Map<String, String>? props,
-      String? referrer}) async {
+      String? referrer,
+      PlausibleRevenue? revenue,
+      bool interactive = true}) async {
     return 200;
   }
 
@@ -146,7 +152,7 @@ void main() {
 
   test('getTemplateSize returns size', () async {
     await templates.saveTemplate('test');
-    // Mock file size is 0
-    expect(templates.getTemplateSize('test'), '0.00 GB');
+    // Mock file size is 0 — formatted per-unit now, not pinned to GB (ST-42).
+    expect(templates.getTemplateSize('test'), '0 B');
   });
 }

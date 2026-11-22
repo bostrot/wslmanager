@@ -1,3 +1,4 @@
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wsl2distromanager/components/helpers.dart';
@@ -39,5 +40,33 @@ void main() {
     // It tries removing first/last char if decode fails
     expect(fixJsonContent('x{"key": "value"}'), '{"key": "value"}');
     expect(fixJsonContent('{"key": "value"}x'), '{"key": "value"}');
+  });
+
+  // A destructive control has to read as one in both themes: a flat
+  // `Colors.red` is the light-theme shade, and it turns muddy against the
+  // dark background (audit LN-04, FIX-08).
+  testWidgets('destructiveColor follows the theme brightness', (tester) async {
+    Future<Color> read(Brightness brightness) async {
+      late Color colour;
+      await tester.pumpWidget(FluentApp(
+        home: FluentTheme(
+          data: FluentThemeData(brightness: brightness),
+          child: Builder(
+              key: ValueKey(brightness),
+              builder: (context) {
+                colour = destructiveColor(context);
+                return const SizedBox();
+              }),
+        ),
+      ));
+      return colour;
+    }
+
+    final light = await read(Brightness.light);
+    final dark = await read(Brightness.dark);
+
+    expect(light, isNot(dark));
+    // The dark-theme shade is the lighter one: it sits on a dark background.
+    expect(dark.computeLuminance(), greaterThan(light.computeLuminance()));
   });
 }

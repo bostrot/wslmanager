@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- No sandbox: the app manages VM disk images in user-chosen locations
+	     and spawns the vmctl helper, ssh and other host tools — the same
+	     process model the Windows build uses with wsl.exe. -->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.network.server</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.security.virtualization</key>
+	<true/>
+	<!-- file_picker refuses to open any panel unless the app carries one of the
+	     user-selected file entitlements, sandbox or not. Read-write covers the
+	     save panel as well as the open ones. -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+</dict>
+</plist>

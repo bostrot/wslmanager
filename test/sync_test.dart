@@ -79,7 +79,9 @@ void main() {
         required String url,
         required String saveFilePath,
         Map<String, String>? headers,
+        int? chunkSize,
         Function(int, int, double)? onProgress,
+        Function(File)? onDone,
         Function(dynamic)? onError,
       }) {
         mockDownloader.url = url;

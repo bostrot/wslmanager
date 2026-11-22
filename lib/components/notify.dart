@@ -1,16 +1,33 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:wsl2distromanager/theme.dart';
+
+/// Re-exported so a caller can name a severity without pulling all of
+/// fluent_ui into an api/ file.
+export 'package:fluent_ui/fluent_ui.dart' show InfoBarSeverity;
+
+/// Signature of the app-wide status bar callback.
+///
+/// [RootPageState.statusMsg] is the only implementation; tests install their
+/// own stub. Keep the two in sync — this is a plain function type, so a stub
+/// that is missing a named parameter fails to assign.
+typedef NotifyMessage = void Function(
+  String msg, {
+  Duration? duration,
+  InfoBarSeverity severity,
+  bool loading,
+  bool useWidget,
+  bool leadingIcon,
+  Widget widget,
+});
+
+/// How long a status message stays on screen when the caller does not say.
+///
+/// Messages used to live until the next one replaced them, so a "Created
+/// instance" from the create screen followed the user around for minutes.
+const Duration notifyDefaultDuration = Duration(seconds: 8);
 
 /// Notification bar at the bottom of the screen
 class Notify {
-  static late Function(
-    String msg, {
-    Duration? duration,
-    bool loading,
-    bool useWidget,
-    bool leadingIcon,
-    Widget widget,
-  }) message;
+  static late NotifyMessage message;
   static late Notify instance;
 
   Notify() {
@@ -19,54 +36,35 @@ class Notify {
 }
 
 /// Widget
-Widget statusBuilder(status, statusWidget, loading, onClose) {
-  return Align(
-    alignment: Alignment.bottomCenter,
-    child: Padding(
-      padding: const EdgeInsets.only(bottom: 10.0),
-      child: AnimatedOpacity(
-        opacity: status != '' ? 1.0 : 0.0,
-        duration: const Duration(milliseconds: 100),
-        child: InfoBar(
-          style: InfoBarThemeData(
-            decoration: (severity) {
-              Color color;
-              switch (severity) {
-                case InfoBarSeverity.info:
-                  color = AppTheme().backgroundColor.light;
-                  break;
-                case InfoBarSeverity.warning:
-                  color = AppTheme().backgroundColor.light;
-                  break;
-                case InfoBarSeverity.success:
-                  color = AppTheme().backgroundColor.light;
-                  break;
-                case InfoBarSeverity.error:
-                  color = AppTheme().backgroundColor.light;
-                  break;
-              }
-              return BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(4.0),
-                border: Border.all(
-                  color: AppTheme().backgroundColor.darker,
-                ),
-              );
-            },
-          ),
-          title: status == 'WIDGET'
-              ? SingleChildScrollView(
-                  scrollDirection: Axis.horizontal, child: statusWidget)
-              : Text(
-                  status,
-                ),
-          action: loading
-              ? const SizedBox(width: 20.0, height: 20.0, child: ProgressRing())
-              : const Text(''),
-          severity: InfoBarSeverity.info,
-          onClose: () => onClose(),
-        ),
-      ),
+///
+/// Returns a zero-sized widget while there is nothing to say: the empty bar
+/// used to keep a 126x62 invisible hit target — and a tab stop — on every
+/// screen.
+Widget statusBuilder(
+  String status,
+  Widget statusWidget,
+  bool loading,
+  bool leadingIcon,
+  InfoBarSeverity severity,
+  VoidCallback onClose,
+) {
+  if (status.isEmpty) return const SizedBox.shrink();
+
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(10.0, 4.0, 10.0, 10.0),
+    child: InfoBar(
+      title: status == 'WIDGET'
+          ? SingleChildScrollView(
+              scrollDirection: Axis.horizontal, child: statusWidget)
+          : Text(status),
+      action: loading
+          ? const SizedBox.square(dimension: 20.0, child: ProgressRing())
+          : null,
+      severity: severity,
+      isIconVisible: leadingIcon,
+      // Closing a running operation only hid its progress; the work carried on
+      // regardless, which is worse than offering no control at all.
+      onClose: loading ? null : onClose,
     ),
   );
 }

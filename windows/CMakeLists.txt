@@ -50,6 +50,15 @@ add_subdirectory("runner")
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# The plugin DLLs are linked into the runner by generated_plugins.cmake.
+# Delay-load them for the same reason flutter_windows.dll is delay-loaded in
+# runner/CMakeLists.txt: main.cpp must be able to run, and relaunch through
+# the real executable path, when the app was started via a symlink.
+foreach(plugin ${FLUTTER_PLUGIN_LIST})
+  target_link_options(${BINARY_NAME} PRIVATE
+    "/DELAYLOAD:$<TARGET_FILE_NAME:${plugin}_plugin>")
+endforeach(plugin)
+
 
 # === Installation ===
 # Support files are copied into place next to the executable, so that it can

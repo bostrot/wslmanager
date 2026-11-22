@@ -1,20 +1,75 @@
 {
-    "Ubuntu 24.04": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64-root.tar.xz",
-    "Ubuntu 22.04": "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64-root.tar.xz",
-    "Ubuntu 21.04": "https://cloud-images.ubuntu.com/releases/hirsute/release/ubuntu-21.04-server-cloudimg-amd64-wsl.rootfs.tar.gz",
-    "Fedora 37": "https://github.com/bostrot/wsl2-distro-manager/releases/download/v1.4.0/fedora-37-x86_64.tar",
-    "Rocky Linux 9": "https://raw.githubusercontent.com/rocky-linux/sig-cloud-instance-images/Rocky-9.1.20230215-Base-x86_64/layer.tar.xz",
-    "Rocky Linux 9.6": "https://raw.githubusercontent.com/rocky-linux/sig-cloud-instance-images/Rocky-9.6.20250531-Base-x86_64/layer.tar.xz",
-    "Alpine 3.21.0": "https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/alpine-minirootfs-3.21.0-x86_64.tar.gz",
-    "Alpine 3.23.0": "https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/x86_64/alpine-minirootfs-3.23.0-x86_64.tar.gz",
-    "Debian 10": "https://github.com/bostrot/wsl2-distro-manager/releases/download/v0.6.1/debian_rootfs_x64.tar.gz",
-    "Kali Linux": "https://github.com/bostrot/wsl2-distro-manager/releases/download/v0.6.1/kalilinux_rootfs_x64.tar.gz",
-    "OpenSUSE": "https://github.com/bostrot/wsl2-distro-manager/releases/download/v0.6.1/opensuse_rootfs_x64.tar.gz",
-    "SLES 12": "https://github.com/bostrot/wsl2-distro-manager/releases/download/v0.6.1/sles12_rootfs_x64.tar.gz",
-    "SLES 15": "https://github.com/bostrot/wsl2-distro-manager/releases/download/v0.6.1/sles15_rootfs_x64.tar.gz",
-    "Fedora 36": "https://github.com/bostrot/wsl2-distro-manager/releases/download/v1.4.0/fedora-36-x86_64.tar",
-    "Ubuntu 20.04": "https://cloud-images.ubuntu.com/releases/focal/release/ubuntu-20.04-server-cloudimg-amd64-root.tar.xz",
-    "Ubuntu 19.04": "https://cloud-images.ubuntu.com/releases/disco/release/ubuntu-19.04-server-cloudimg-amd64-wsl.rootfs.tar.gz",
-    "Ubuntu 18.04": "https://cloud-images.ubuntu.com/releases/bionic/release/ubuntu-18.04-server-cloudimg-amd64-wsl.rootfs.tar.gz",
-    "Ubuntu 16.04": "https://cloud-images.ubuntu.com/releases/xenial/release/ubuntu-16.04-server-cloudimg-amd64-wsl.rootfs.tar.gz"
+    "Ubuntu 26.04": {
+        "x64": "https://cloud-images.ubuntu.com/resolute/current/resolute-server-cloudimg-amd64-root.tar.xz",
+        "arm64": "https://cloud-images.ubuntu.com/resolute/current/resolute-server-cloudimg-arm64-root.tar.xz"
+    },
+    "Ubuntu 24.04": {
+        "x64": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64-root.tar.xz",
+        "arm64": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-arm64-root.tar.xz"
+    },
+    "Ubuntu 22.04": {
+        "x64": "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64-root.tar.xz",
+        "arm64": "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-arm64-root.tar.xz"
+    },
+    "Debian 13": {
+        "x64": "https://raw.githubusercontent.com/debuerreotype/docker-debian-artifacts/dist-amd64/trixie/oci/blobs/rootfs.tar.gz",
+        "arm64": "https://raw.githubusercontent.com/debuerreotype/docker-debian-artifacts/dist-arm64v8/trixie/oci/blobs/rootfs.tar.gz"
+    },
+    "Debian 12": {
+        "x64": "https://raw.githubusercontent.com/debuerreotype/docker-debian-artifacts/dist-amd64/bookworm/oci/blobs/rootfs.tar.gz",
+        "arm64": "https://raw.githubusercontent.com/debuerreotype/docker-debian-artifacts/dist-arm64v8/bookworm/oci/blobs/rootfs.tar.gz"
+    },
+    "Alpine 3.24.1": {
+        "x64": "https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86_64/alpine-minirootfs-3.24.1-x86_64.tar.gz",
+        "arm64": "https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/aarch64/alpine-minirootfs-3.24.1-aarch64.tar.gz"
+    },
+    "Alpine 3.23.5": {
+        "x64": "https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/x86_64/alpine-minirootfs-3.23.5-x86_64.tar.gz",
+        "arm64": "https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/aarch64/alpine-minirootfs-3.23.5-aarch64.tar.gz"
+    },
+    "Fedora 44": {
+        "x64": "https://download.fedoraproject.org/pub/fedora/linux/releases/44/Container/x86_64/images/Fedora-WSL-Base-44-1.7.x86_64.wsl",
+        "arm64": "https://download.fedoraproject.org/pub/fedora/linux/releases/44/Container/aarch64/images/Fedora-WSL-Base-44-1.7.aarch64.wsl"
+    },
+    "Fedora 43": {
+        "x64": "https://download.fedoraproject.org/pub/fedora/linux/releases/43/Container/x86_64/images/Fedora-WSL-Base-43-1.6.x86_64.wsl",
+        "arm64": "https://download.fedoraproject.org/pub/fedora/linux/releases/43/Container/aarch64/images/Fedora-WSL-Base-43-1.6.aarch64.wsl"
+    },
+    "Rocky Linux 10.2": {
+        "x64": "https://dl.rockylinux.org/pub/rocky/10/images/x86_64/Rocky-10-WSL-Base.latest.x86_64.wsl",
+        "arm64": "https://dl.rockylinux.org/pub/rocky/10/images/aarch64/Rocky-10-WSL-Base.latest.aarch64.wsl"
+    },
+    "Rocky Linux 9.8": {
+        "x64": "https://dl.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-WSL-Base.latest.x86_64.wsl",
+        "arm64": "https://dl.rockylinux.org/pub/rocky/9/images/aarch64/Rocky-9-WSL-Base.latest.aarch64.wsl"
+    },
+    "AlmaLinux 10": {
+        "x64": "https://github.com/AlmaLinux/wsl-images/releases/download/v10.2.20260526.0/AlmaLinux-10.2_x64_20260526.0.wsl",
+        "arm64": "https://github.com/AlmaLinux/wsl-images/releases/download/v10.2.20260526.0/AlmaLinux-10.2_ARM64_20260526.0.wsl"
+    },
+    "AlmaLinux 9": {
+        "x64": "https://github.com/AlmaLinux/wsl-images/releases/download/v9.8.20260526.0/AlmaLinux-9.8_x64_20260526.0.wsl",
+        "arm64": "https://github.com/AlmaLinux/wsl-images/releases/download/v9.8.20260526.0/AlmaLinux-9.8_ARM64_20260526.0.wsl"
+    },
+    "OpenSUSE Tumbleweed": {
+        "x64": "https://download.opensuse.org/tumbleweed/appliances/opensuse-tumbleweed-image.x86_64-networkd.tar.xz",
+        "arm64": "https://download.opensuse.org/ports/aarch64/tumbleweed/appliances/opensuse-tumbleweed-image.aarch64-networkd.tar.xz"
+    },
+    "OpenSUSE Leap 16.0": {
+        "x64": "https://download.opensuse.org/distribution/leap/16.0/appliances/opensuse-leap-image.x86_64-networkd.tar.xz",
+        "arm64": "https://download.opensuse.org/distribution/leap/16.0/appliances/opensuse-leap-image.aarch64-networkd.tar.xz"
+    },
+    "SLES 16.0": {
+        "x64": "https://github.com/SUSE/WSL-instarball/releases/download/v20260805.0/SUSE-Linux-Enterprise-16.0-16.0.x86_64-1.131-Build1.131.wsl"
+    },
+    "SLES 15 SP7": {
+        "x64": "https://github.com/SUSE/WSL-instarball/releases/download/v20260605.0/SUSE-Linux-Enterprise-15-SP7-15.7.x86_64-32.3-Build32.3.wsl"
+    },
+    "Kali Linux 2026.2": {
+        "x64": "https://kali.download/wsl-images/current/kali-linux-2026.2-wsl-rootfs-amd64.wsl",
+        "arm64": "https://kali.download/wsl-images/current/kali-linux-2026.2-wsl-rootfs-arm64.wsl"
+    },
+    "Arch Linux": {
+        "x64": "https://geo.mirror.pkgbuild.com/wsl/latest/archlinux.wsl"
+    }
 }

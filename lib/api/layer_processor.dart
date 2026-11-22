@@ -5,11 +5,22 @@ import 'package:path/path.dart' as p;
 
 class LayerProcessor {
   /// Merges Docker layers into a single rootfs tarball, handling whiteouts.
-  /// [layerPaths] is a list of paths to .tar.gz layer files, ordered from bottom (base) to top.
+  /// [layerPaths] is a list of paths to layer files, ordered from bottom (base) to top.
   /// [outputPath] is the path where the resulting .tar.gz will be written.
+  ///
+  /// A layer may be gzipped or a plain tar, and which one it is depends on
+  /// where it came from: registry blobs are gzipped, while the `layer.tar`
+  /// entries `docker save` writes are not. Each layer is therefore sniffed
+  /// rather than assumed — decoding a plain tar as gzip raises
+  /// `FormatException: Filter error, bad data`, which is what made importing
+  /// from a local Docker image fail outright.
   Future<void> mergeLayers(List<String> layerPaths, String outputPath,
       Function(String) onStatus) async {
     final keptFiles = <String, int>{}; // Path -> Layer Index
+    final gzipped = <String, bool>{};
+    for (final layerPath in layerPaths) {
+      gzipped[layerPath] = await _isGzip(File(layerPath));
+    }
 
     onStatus('Scanning layers...');
     // Pass 1: Determine which files to keep
@@ -19,7 +30,7 @@ class LayerProcessor {
       final file = File(layerPath);
       if (!await file.exists()) continue;
 
-      final reader = TarReader(file.openRead().transform(gzip.decoder));
+      final reader = TarReader(_read(file, gzipped[layerPath] ?? true));
       try {
         while (await reader.moveNext()) {
           final entry = reader.current;
@@ -66,7 +77,7 @@ class LayerProcessor {
         final file = File(layerPath);
         if (!await file.exists()) continue;
 
-        final reader = TarReader(file.openRead().transform(gzip.decoder));
+        final reader = TarReader(_read(file, gzipped[layerPath] ?? true));
         try {
           while (await reader.moveNext()) {
             final entry = reader.current;
@@ -110,4 +121,22 @@ class LayerProcessor {
         .transform(gzip.encoder)
         .pipe(outFile.openWrite());
   }
+
+  /// Whether [file] starts with the gzip magic number.
+  ///
+  /// Only the first two bytes are read: a layer can be gigabytes, and the
+  /// answer is in its header.
+  Future<bool> _isGzip(File file) async {
+    if (!await file.exists()) return false;
+    final handle = await file.open();
+    try {
+      final header = await handle.read(2);
+      return header.length == 2 && header[0] == 0x1f && header[1] == 0x8b;
+    } finally {
+      await handle.close();
+    }
+  }
+
+  Stream<List<int>> _read(File file, bool isGzipped) =>
+      isGzipped ? file.openRead().transform(gzip.decoder) : file.openRead();
 }

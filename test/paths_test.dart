@@ -1,8 +1,10 @@
+@TestOn('windows')
+library paths_test;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wsl2distromanager/components/helpers.dart';
 import 'package:wsl2distromanager/api/templates.dart';
-import 'package:wsl2distromanager/components/constants.dart';
 import 'dart:io';
 
 void main() {
@@ -10,10 +12,12 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     await initPrefs();
 
-    // Default behavior
-    expect(getDistroPath().path, equals('${defaultPath}\\distros'));
-    expect(Templates().getTemplatePath().path,
-        equals('${defaultPath}\\templates'));
+    // Default behavior. With no DistroPath pref set, paths derive from the
+    // per-user storage root (%APPDATA% on Windows), not the legacy
+    // hardcoded C:\WSL2-Distros constant.
+    final root = getDefaultStorageRootPath();
+    expect(getDistroPath().path, equals('$root\\distros'));
+    expect(Templates().getTemplatePath().path, equals('$root\\templates'));
 
     // Change preference
     prefs.setString('DistroPath', 'D:\\CustomPath');
@@ -46,11 +50,11 @@ void main() {
     expect(getDataPath().path, equals('D:\\Fallback'));
   });
 
-  test('getDataPath falls back to defaultPath when neither pref is set',
-      () async {
+  test('getDataPath falls back to the default storage root when neither pref '
+      'is set', () async {
     SharedPreferences.setMockInitialValues({});
     await initPrefs();
-    expect(getDataPath().path, equals(defaultPath));
+    expect(getDataPath().path, equals(getDefaultStorageRootPath()));
   });
 
   test('getInstancePath uses per-instance pref when set', () async {

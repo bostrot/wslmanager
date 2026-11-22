@@ -16,39 +16,31 @@ bugDialog() {
   showDialog(
     context: context,
     builder: (context) => ContentDialog(
-      title: const Text('🐞 Bug Report'),
+      // Wide enough for three action labels to stay on one line once
+      // translated.
+      constraints: const BoxConstraints(maxWidth: 560.0),
+      title: Text('🐞 ${'reportbug-text'.i18n()}'),
       content: Text('report-text'.i18n()),
       actions: [
-        SizedBox(
-          height: 50.0,
-          child: Button(
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
-            child: Text('cancelreport-text'.i18n()),
-          ),
+        Button(
+          onPressed: () {
+            Navigator.of(context).pop();
+          },
+          child: Text('cancelreport-text'.i18n()),
         ),
-        SizedBox(
-          height: 50.0,
-          child: Button(
-            onPressed: () {
-              Navigator.of(context).pop();
-              // Open github issue
-              launchUrlString(githubIssues);
-            },
-            child: Text('githubissue-text'.i18n()),
-          ),
+        Button(
+          onPressed: () {
+            Navigator.of(context).pop();
+            uploadLog();
+          },
+          child: Text('uploadlogfile-text'.i18n()),
         ),
-        SizedBox(
-          height: 50.0,
-          child: Button(
-            onPressed: () {
-              Navigator.of(context).pop();
-              // Upload log file
-              uploadLog();
-            },
-            child: Text('uploadlogfile-text'.i18n()),
-          ),
+        FilledButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+            launchUrlString(githubIssues);
+          },
+          child: Text('githubissue-text'.i18n()),
         ),
       ],
     ),

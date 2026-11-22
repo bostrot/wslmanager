@@ -50,6 +50,14 @@ jobs:
             echo "has_token=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # The regex deliberately matches both setups a release carries —
+      # wsl2-distro-manager-v<ver>-setup.exe and the -arm64-setup.exe beside it
+      # — so the manifest gets an installer entry per architecture and an Arm64
+      # PC stops being handed the emulated x64 build. The architecture is read
+      # off the URL, which is why the Arm64 asset's name has to keep saying
+      # "arm64". The Arm64 job attaches its asset before this workflow is
+      # dispatched; if that job failed, the release simply has the one
+      # installer and the manifest is what it always was.
       - name: Publish to WinGet
         if: steps.winget_token.outputs.has_token == 'true'
         uses: vedantmgoyal9/winget-releaser@v2

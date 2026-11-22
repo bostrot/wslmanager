@@ -1,0 +1,40 @@
+PODS:
+  - desktop_window (0.0.1):
+    - FlutterMacOS
+  - flutter_localization (0.0.1):
+    - FlutterMacOS
+  - FlutterMacOS (1.0.0)
+  - screen_retriever_macos (0.0.1):
+    - FlutterMacOS
+  - system_theme (0.0.1):
+    - FlutterMacOS
+
+DEPENDENCIES:
+  - desktop_window (from `Flutter/ephemeral/.symlinks/plugins/desktop_window/macos`)
+  - flutter_localization (from `Flutter/ephemeral/.symlinks/plugins/flutter_localization/macos`)
+  - FlutterMacOS (from `Flutter/ephemeral`)
+  - screen_retriever_macos (from `Flutter/ephemeral/.symlinks/plugins/screen_retriever_macos/macos`)
+  - system_theme (from `Flutter/ephemeral/.symlinks/plugins/system_theme/macos`)
+
+EXTERNAL SOURCES:
+  desktop_window:
+    :path: Flutter/ephemeral/.symlinks/plugins/desktop_window/macos
+  flutter_localization:
+    :path: Flutter/ephemeral/.symlinks/plugins/flutter_localization/macos
+  FlutterMacOS:
+    :path: Flutter/ephemeral
+  screen_retriever_macos:
+    :path: Flutter/ephemeral/.symlinks/plugins/screen_retriever_macos/macos
+  system_theme:
+    :path: Flutter/ephemeral/.symlinks/plugins/system_theme/macos
+
+SPEC CHECKSUMS:
+  desktop_window: de6acd6053564bdccd9f4b9473d25bf4f2ad9bdf
+  flutter_localization: 3cda759884c7dab4466fe963d97fba723a492666
+  FlutterMacOS: c232990155153907050900a2e175c7773903ba4e
+  screen_retriever_macos: 452e51764a9e1cdb74b3c541238795849f21557f
+  system_theme: ed74293ad07d3a05e3e2d0059ff342360346f1a0
+
+PODFILE CHECKSUM: 1e95c36afbfd1cb6423ceca4de7a8e1b256fb6ac
+
+COCOAPODS: 1.17.0

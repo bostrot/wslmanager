@@ -2,18 +2,24 @@ import 'dart:io';
 
 import 'package:localization/localization.dart';
 import 'package:wsl2distromanager/api/safe_paths.dart';
-import 'package:wsl2distromanager/api/wsl.dart';
+import 'package:wsl2distromanager/api/vm/vm_backend.dart';
+import 'package:wsl2distromanager/api/vm/vm_platform.dart';
+import 'package:wsl2distromanager/api/wsl_errors.dart';
 import 'package:wsl2distromanager/components/analytics.dart';
 import 'package:wsl2distromanager/components/helpers.dart';
 import 'package:wsl2distromanager/components/notify.dart';
 
 /// This class handles all template related functions.
-/// Templates are distros that are saved as ext4 files with additional metadata
-/// saved in the SharedPreferences.
+/// Templates are instances exported to a file (ext4 tarballs on WSL, raw
+/// disk images on the Apple backend) with additional metadata saved in the
+/// SharedPreferences.
 class Templates {
-  final WSLApi wslApi;
+  final VmBackend wslApi;
 
-  Templates({WSLApi? wslApi}) : wslApi = wslApi ?? WSLApi();
+  Templates({VmBackend? wslApi}) : wslApi = wslApi ?? vmBackend();
+
+  /// File extension for template files on this backend, without the dot.
+  String get extension => wslApi.templateExtension;
 
   /// Save a distro as a template by [name]
   Future<void> saveTemplate(String name) async {
@@ -34,11 +40,13 @@ class Templates {
     plausible.event(name: "wsl_saveastemplate");
     Notify.message('$templateName ${'savingastemplate-text'.i18n()}.',
         loading: true);
-    await wslApi.export(name, getTemplatePath().file('$templateName.ext4'));
+    await wslApi.export(
+        name, getTemplatePath().file('$templateName.$extension'));
     templates ??= [];
     templates.add(templateName);
     prefs.setStringList('templates', templates);
     Notify.message('$templateName ${'savedastemplate-text'.i18n()}.',
+        severity: InfoBarSeverity.success,
         duration: const Duration(seconds: 3));
   }
 
@@ -47,7 +55,8 @@ class Templates {
     final targetName = newName.trim().isEmpty ? templateName : newName.trim();
 
     if (targetName.isEmpty) {
-      Notify.message('errorentername-text'.i18n());
+      Notify.message('errorentername-text'.i18n(),
+          severity: InfoBarSeverity.error);
       return;
     }
 
@@ -57,11 +66,13 @@ class Templates {
       final result = await wslApi.import(targetName,
           getInstancePath(targetName).path, getTemplateFilePath(templateName));
       final output = result.trim();
-      Notify.message(
-          output.isNotEmpty ? output : 'createdinstance-text'.i18n());
+      Notify.message(output.isNotEmpty ? output : 'createdinstance-text'.i18n(),
+          severity: InfoBarSeverity.success);
     } catch (e) {
+      final failure = WslFailure.from(e);
       Notify.message(
-          e.toString().trim().isNotEmpty ? e.toString() : 'error-text'.i18n());
+          '${'createinstancefailed-text'.i18n([targetName])} ${failure.shortReason}'.trim(),
+          severity: InfoBarSeverity.error);
     }
   }
 
@@ -75,16 +86,53 @@ class Templates {
     prefs.setStringList('templates', templates);
     // Remove description
     prefs.remove('template_description_$name');
-    // Delete template file
-    await File(getTemplateFilePath(name)).delete();
-    Notify.message('deletedinstance-text'.i18n([name]));
+    // Delete template file. The prefs entry is already gone, so a file
+    // something else removed must not turn the cleanup into a crash.
+    final file = File(getTemplateFilePath(name));
+    if (await file.exists()) await file.delete();
+    Notify.message('deletedinstance-text'.i18n([name]),
+        severity: InfoBarSeverity.success);
   }
 
   /// Get a list of all templates.
+  ///
+  /// The stored list is reconciled with the template folder so templates
+  /// survive a lost or reset preferences file: any .ext4 sitting in the
+  /// template directory is adopted, and entries whose file is gone are
+  /// dropped.
   List<String> getTemplates() {
-    var templates = prefs.getStringList('templates');
-    if (templates == null) return [];
-    return templates;
+    final stored = prefs.getStringList('templates') ?? [];
+    final onDisk = scanTemplateFiles();
+
+    final merged = <String>[
+      ...stored.where((name) => onDisk.contains(name)),
+      ...onDisk.where((name) => !stored.contains(name)),
+    ];
+
+    if (merged.length != stored.length ||
+        !merged.every((name) => stored.contains(name))) {
+      prefs.setStringList('templates', merged);
+    }
+    return merged;
+  }
+
+  /// Template names derived from the .ext4 files in the template folder.
+  List<String> scanTemplateFiles() {
+    try {
+      final dir = Directory(getTemplatePath().path);
+      if (!dir.existsSync()) return [];
+      return dir
+          .listSync()
+          .whereType<File>()
+          .map((file) => file.uri.pathSegments.last)
+          .where((file) => file.endsWith('.$extension'))
+          .map((file) =>
+              file.substring(0, file.length - '.$extension'.length))
+          .toList()
+        ..sort();
+    } on FileSystemException {
+      return [];
+    }
   }
 
   /// Return the general template path. Templates are saved here by default.
@@ -98,17 +146,17 @@ class Templates {
   /// Return the path to a template by [name].
   /// e.g. C:\WSL2-Distros\templates\ubuntu.ext4
   String getTemplateFilePath(String name) {
-    return getTemplatePath().file('$name.ext4');
+    return getTemplatePath().file('$name.$extension');
   }
 
-  /// Get template size by [name].
-  /// Returns a string with the size in GB fixed to 2 decimal places.
-  /// e.g. 1.23 GB
+  /// Get template size by [name], in a unit that keeps digits.
+  ///
+  /// Empty, not '0 GB', when the file is missing: the screen used to drop
+  /// any template whose size formatted to that string (audit ST-37, ST-42).
   String getTemplateSize(String name) {
     var path = getTemplateFilePath(name);
-    if (File(path).existsSync() == false) return '0 GB';
-    var size = File(path).lengthSync();
-    return '${(size / 1024 / 1024 / 1024).toStringAsFixed(2)} GB';
+    if (File(path).existsSync() == false) return '';
+    return formatBytes(File(path).lengthSync());
   }
 
   /// Get template description by [name].

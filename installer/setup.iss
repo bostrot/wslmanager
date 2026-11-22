@@ -2,6 +2,22 @@
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
+; Which build sits in payload\. The x64 installer stays "x64compatible" so it
+; keeps installing on Arm64 machines under emulation exactly as before; the
+; Arm64 installer is offered alongside it and is the one WinGet hands an Arm64
+; PC. Both carry the same AppId, so either upgrades the other in place.
+#ifndef TargetArch
+  #define TargetArch "x64"
+#endif
+#if TargetArch == "arm64"
+  #define ArchitectureIdentifiers "arm64"
+  #define OutputName "wsl2-distro-manager-setup-arm64"
+#elif TargetArch == "x64"
+  #define ArchitectureIdentifiers "x64compatible"
+  #define OutputName "wsl2-distro-manager-setup"
+#else
+  #error TargetArch must be "x64" or "arm64"
+#endif
 
 #include "CodeDependencies.iss"
 
@@ -15,11 +31,11 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 LicenseFile=..\LICENSE
 OutputDir=.
-OutputBaseFilename=wsl2-distro-manager-setup
+OutputBaseFilename={#OutputName}
 Compression=lzma
 SolidCompression=yes
-ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
+ArchitecturesAllowed={#ArchitectureIdentifiers}
+ArchitecturesInstallIn64BitMode={#ArchitectureIdentifiers}
 PrivilegesRequired=admin
 WizardStyle=modern
 UninstallDisplayIcon={app}\wsl2distromanager.exe

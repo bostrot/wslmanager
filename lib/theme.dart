@@ -34,20 +34,6 @@ class AppTheme extends ChangeNotifier {
     notifyListeners();
   }
 
-  AccentColor _backgroundColor = systemBackgroundColor;
-  AccentColor get backgroundColor => _backgroundColor;
-  set backgroundColor(AccentColor color) {
-    _backgroundColor = color;
-    notifyListeners();
-  }
-
-  Color _textColor = systemTextColor;
-  Color get textColor => _textColor;
-  set textColor(Color color) {
-    _textColor = textColor;
-    notifyListeners();
-  }
-
   ThemeMode _mode = ThemeMode.system;
   ThemeMode get mode => _mode;
   set mode(ThemeMode mode) {
@@ -91,7 +77,7 @@ class AppTheme extends ChangeNotifier {
         WindowEffect.solid,
         WindowEffect.acrylic,
       ].contains(effect)
-          ? FluentTheme.of(context).micaBackgroundColor.withOpacity(0.05)
+          ? FluentTheme.of(context).micaBackgroundColor.withValues(alpha: 0.05)
           : Colors.transparent,
       dark: FluentTheme.of(context).brightness.isDark,
     );
@@ -129,35 +115,37 @@ AccentColor get systemAccentColor {
   return Colors.blue;
 }
 
-AccentColor get systemBackgroundColor {
-  if ((defaultTargetPlatform == TargetPlatform.windows ||
-      defaultTargetPlatform == TargetPlatform.android)) {
-    // Fluent UI background colors (grey)
-    if (AppTheme.themeMode == ThemeMode.dark) {
-      return AccentColor('normal', {
-        'darkest': Colors.grey[200],
-        'darker': Colors.grey[190],
-        'dark': Colors.grey[180],
-        'normal': Colors.grey[170],
-        'light': Colors.grey[160],
-        'lighter': Colors.grey[150],
-        'lightest': Colors.grey[140],
-      });
-    } else {
-      return AccentColor('normal', {
-        'darkest': Colors.grey[40],
-        'darker': Colors.grey[30],
-        'dark': Colors.grey[20],
-        'normal': Colors.grey[10],
-        'light': Colors.grey[10],
-        'lighter': Colors.grey[10],
-        'lightest': Colors.grey[10],
-      });
-    }
-  }
-  return Colors.grey.toAccentColor();
-}
-
-Color get systemTextColor {
-  return AppTheme.themeMode == ThemeMode.dark ? Colors.white : Colors.black;
+/// The app's theme, built once per brightness so light and dark cannot drift.
+///
+/// [tenFootScreen] adds the TV-distance glow; [focusTheme] is what widens the
+/// focus indicator to a real two-colour perimeter (audit IA-07). fluent_ui's
+/// own default draws a 2px outer stroke and a 1px inner one, which measured as
+/// a hairline on screen — the second stroke is what separates the ring from
+/// whatever it is drawn against, so it gets the same width as the first.
+FluentThemeData buildAppTheme({
+  required Brightness brightness,
+  required AccentColor accentColor,
+  required bool tenFootScreen,
+}) {
+  final base = FluentThemeData(
+    brightness: brightness,
+    accentColor: accentColor,
+    visualDensity: VisualDensity.standard,
+    tooltipTheme: const TooltipThemeData(
+      waitDuration: Duration(milliseconds: 50),
+    ),
+  );
+  return base.copyWith(
+    focusTheme: FocusThemeData(
+      primaryBorder: BorderSide(
+        width: 2.0,
+        color: base.resources.focusStrokeColorOuter,
+      ),
+      secondaryBorder: BorderSide(
+        width: 2.0,
+        color: base.resources.focusStrokeColorInner,
+      ),
+      glowFactor: tenFootScreen ? 2.0 : 0.0,
+    ),
+  );
 }

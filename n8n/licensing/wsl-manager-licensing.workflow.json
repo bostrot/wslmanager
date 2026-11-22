@@ -1,0 +1,1199 @@
+{
+  "name": "WSL Manager Licensing",
+  "nodes": [
+    {
+      "parameters": {
+        "events": [
+          "checkout.session.completed",
+          "invoice.paid",
+          "invoice.payment_failed",
+          "customer.subscription.created",
+          "customer.subscription.deleted"
+        ]
+      },
+      "type": "n8n-nodes-base.stripeTrigger",
+      "typeVersion": 1,
+      "position": [
+        -832,
+        -192
+      ],
+      "id": "e31281c3-5e0a-44b5-bdbf-dd4bb02e922d",
+      "name": "Stripe Trigger",
+      "webhookId": "270d6b7d-a499-4eca-8d46-dcc996c6aafc",
+      "credentials": {
+        "stripeApi": {
+          "id": "t9p8acDeeMw57GYN",
+          "name": "Stripe TEST account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "invoice.paid",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "697aec59-b40e-402e-a396-d16d77673e45"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "paid"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "c0e8c0d8-faca-4148-a2cb-515f2dd9c13a",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "invoice.payment_failed",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "failed"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "1a2774ea-52ec-46e3-ad45-2cba5be56347",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "checkout.session.completed",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "completed"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "f2fbda90-cd72-4d10-b7a0-c551dbc59806",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "customer.subscription.created",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "created"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "9c706a7f-d226-430c-9d3d-78cf13e30e23",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "customer.subscription.created",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "deleted"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -608,
+        -240
+      ],
+      "id": "b92d4602-5c32-4a5f-a4d3-479e63a8f5ec",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "action": "generate"
+      },
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [
+        -384,
+        -288
+      ],
+      "id": "2c92eb58-b2eb-4d34-ae97-b1d24d5f1ebd",
+      "name": "Crypto"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "IYaVIPxcXhAv6Ob8",
+          "mode": "list",
+          "cachedResultName": "wsl-manager-licenses",
+          "cachedResultUrl": "/projects/HzIG0ZEHlkht6dXK/datatables/IYaVIPxcXhAv6Ob8"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "stripe_id",
+              "keyValue": "={{ $('Stripe Trigger').item.json.data.object.customer }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "active": true,
+            "email": "={{ $('Stripe Trigger').item.json.data.object.customer_email }}",
+            "stripe_id": "={{ $('Stripe Trigger').item.json.data.object.customer }}",
+            "license_key": "={{ $json.data }}",
+            "usage": 0
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "stripe_id",
+              "displayName": "stripe_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "active",
+              "displayName": "active",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "license_key",
+              "displayName": "license_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "expires",
+              "displayName": "expires",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "is_trial",
+              "displayName": "is_trial",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "plan",
+              "displayName": "plan",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "usage",
+              "displayName": "usage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -160,
+        -288
+      ],
+      "id": "cb6acc59-17e7-411c-b873-7be31251e138",
+      "name": "Upsert row(s)"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "IYaVIPxcXhAv6Ob8",
+          "mode": "list",
+          "cachedResultName": "wsl-manager-licenses",
+          "cachedResultUrl": "/projects/HzIG0ZEHlkht6dXK/datatables/IYaVIPxcXhAv6Ob8"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "stripe_id",
+              "keyValue": "={{ $('Stripe Trigger').item.json.data.object.customer }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "active": false
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "stripe_id",
+              "displayName": "stripe_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "active",
+              "displayName": "active",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "license_key",
+              "displayName": "license_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -384,
+        -96
+      ],
+      "id": "8cdba43d-ccc5-4500-806b-aa1e01bd040f",
+      "name": "Update row(s)"
+    },
+    {
+      "parameters": {
+        "path": "wsl-manager/validate",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -832,
+        176
+      ],
+      "id": "9483b308-8ad0-4bae-9413-00b0f771028e",
+      "name": "Validate License",
+      "webhookId": "fbcf25b9-a0ea-484d-b8ac-bd7c2a36816b"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"valid\": false, \"reason\": \"expired\"}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -160,
+        320
+      ],
+      "id": "829fb53b-186d-4c8c-930b-c2fb6e455729",
+      "name": "Invalid License"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wsl-manager/query",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -832,
+        464
+      ],
+      "id": "850f8837-1712-4e08-8fb6-914e7fd4660e",
+      "name": "AI Query",
+      "webhookId": "43b3c09c-af1c-4822-b7dc-2bfffef4eb15"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "IYaVIPxcXhAv6Ob8",
+          "mode": "list",
+          "cachedResultName": "wsl-manager-licenses",
+          "cachedResultUrl": "/projects/HzIG0ZEHlkht6dXK/datatables/IYaVIPxcXhAv6Ob8"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "license_key",
+              "keyValue": "={{ $json.body.license_key }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -608,
+        464
+      ],
+      "id": "aea457e5-1fcd-4afc-b7df-8d3f1171efb4",
+      "name": "Get user data from DB"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "IYaVIPxcXhAv6Ob8",
+          "mode": "list",
+          "cachedResultName": "wsl-manager-licenses",
+          "cachedResultUrl": "/projects/HzIG0ZEHlkht6dXK/datatables/IYaVIPxcXhAv6Ob8"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "license_key",
+              "keyValue": "={{ String($json.query.license ?? '').trim().toLowerCase() }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -608,
+        176
+      ],
+      "id": "29eac5f2-8bac-4b6c-aeb0-d2c9c53ceec8",
+      "name": "Find licence",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2be4331e-8553-4756-8e3a-e69bd67fe0ed",
+              "leftValue": "={{ $json.active && DateTime.now() < DateTime.fromISO($json.expires)  }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -384,
+        464
+      ],
+      "id": "c3faf389-ab56-40bd-8c29-304bbdb6d849",
+      "name": "If license is valid"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n\"reply\": {{ $json.output[0].content[0].text.toJsonString() }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        416,
+        416
+      ],
+      "id": "d2914a8b-3b0e-4905-b5d5-f35415d1390c",
+      "name": "Respond with AI response"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "qwen/qwen3-4b-2507",
+          "mode": "list",
+          "cachedResultName": "QWEN/QWEN3-4B-2507"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=You are an AI assistant for WSL2 Distro Manager. Help users with WSL configuration, Docker setup, bash scripting, and Linux administration.\n\nContext:  {{ $('AI Query').item.json.body.context }}\n\nQuery: {{ $('AI Query').item.json.body.query }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        64,
+        416
+      ],
+      "id": "1e8d3e18-dfcb-4e8c-988e-5580ea65deed",
+      "name": "Forward message to AI",
+      "credentials": {
+        "openAiApi": {
+          "id": "G04S3w2wpsuSYCw6",
+          "name": "LiteLLM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "IYaVIPxcXhAv6Ob8",
+          "mode": "list",
+          "cachedResultName": "wsl-manager-licenses",
+          "cachedResultUrl": "/projects/HzIG0ZEHlkht6dXK/datatables/IYaVIPxcXhAv6Ob8"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyValue": "={{ $('Get user data from DB').item.json.id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "usage": "={{ $('If license is valid').item.json.usage + 1 }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "stripe_id",
+              "displayName": "stripe_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "active",
+              "displayName": "active",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "license_key",
+              "displayName": "license_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "expires",
+              "displayName": "expires",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "is_trial",
+              "displayName": "is_trial",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "plan",
+              "displayName": "plan",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "usage",
+              "displayName": "usage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        640,
+        416
+      ],
+      "id": "121098f1-a42f-4b74-aab8-d1714ddb3401",
+      "name": "Update row(s)1"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "months"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -832,
+        832
+      ],
+      "id": "db1f68fb-678e-40cf-9f4e-18c8a7671db7",
+      "name": "Monthly"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "IYaVIPxcXhAv6Ob8",
+          "mode": "list",
+          "cachedResultName": "wsl-manager-licenses",
+          "cachedResultUrl": "/projects/HzIG0ZEHlkht6dXK/datatables/IYaVIPxcXhAv6Ob8"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "condition": "isNotEmpty"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "usage": 0
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "stripe_id",
+              "displayName": "stripe_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "active",
+              "displayName": "active",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "license_key",
+              "displayName": "license_key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "expires",
+              "displayName": "expires",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "is_trial",
+              "displayName": "is_trial",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "plan",
+              "displayName": "plan",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "usage",
+              "displayName": "usage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -608,
+        832
+      ],
+      "id": "2511fbde-62a7-42d8-8e63-de6fd29dabb6",
+      "name": "Reset usage of all users"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2be4331e-8553-4756-8e3a-e69bd67fe0ed",
+              "leftValue": "={{ $json.usage <= 50  }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -160,
+        512
+      ],
+      "id": "0787b418-672a-4e78-bef4-43622bc5e804",
+      "name": "Usage is under 50"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"valid\": false, \"reason\": \"Quota exceeded\"}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        128,
+        608
+      ],
+      "id": "b0d25aff-41de-4f37-8ad0-c3af1211e8e6",
+      "name": "Monthly quota reached"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Seat check for `GET /webhook/wsl-manager/validate`.\n//\n// This file is the body of the \"Seat check\" Code node in\n// wsl-manager-licensing.workflow.json, verbatim — seat_check_test.js fails if\n// the two drift. It also loads as a CommonJS module so the decision logic can\n// be tested with plain `node --test`.\n//\n// A licence has `seats` (1 for Pro). Each device that activates takes a seat;\n// when they are all taken the newest activation wins and the device it\n// displaced is told `seat_taken` the next time it re-validates. So a key\n// shared between two PCs keeps bouncing — whoever entered it last has Pro,\n// the other one is asked to enter it again — while a customer who moves to a\n// new PC just activates there and is never asked anything.\n//\n// The app tells activation and re-validation apart with `action=activate` /\n// `action=revalidate` and names the PC with `device=<stable id>`. A request\n// carrying neither is an app that predates seats: it stays valid exactly as\n// before, and only its address is noted in `devices` so sharing is at least\n// visible in the table. Requests that do name a device store just that id.\n\n// A seat holder that has not checked in for this long has left: its seat is\n// free again. The app re-validates every 14 days and keeps working offline\n// for 60, so anything alive is seen well inside this window.\nconst SEAT_WINDOW_DAYS = 90;\n\n// Devices unseen for this long are dropped from the row altogether.\nconst KEEP_DAYS = 180;\n\n// Caps so the `devices` column cannot grow without bound.\nconst MAX_LEGACY_ENTRIES = 20;\nconst MAX_ENTRIES = 50;\n\nconst DAY_MS = 24 * 60 * 60 * 1000;\n\nfunction parseDevices(raw) {\n  if (Array.isArray(raw)) return raw.filter((d) => d && typeof d.id === 'string');\n  if (typeof raw !== 'string' || !raw.trim()) return [];\n  try {\n    const parsed = JSON.parse(raw);\n    return Array.isArray(parsed)\n      ? parsed.filter((d) => d && typeof d.id === 'string')\n      : [];\n  } catch (e) {\n    return [];\n  }\n}\n\nfunction clientIp(headers) {\n  const h = headers || {};\n  const forwarded = String(h['x-forwarded-for'] || '').split(',')[0].trim();\n  return String(h['cf-connecting-ip'] || h['x-real-ip'] || forwarded || 'unknown');\n}\n\n// Whatever the app sends, stored as at most 64 safe characters.\nfunction normalizeDeviceId(value) {\n  if (typeof value !== 'string') return null;\n  const id = value.trim();\n  if (!id || id.length > 64 || !/^[A-Za-z0-9._:-]+$/.test(id)) return null;\n  return id;\n}\n\nfunction seatCount(row) {\n  const n = Math.floor(Number(row.seats));\n  return Number.isFinite(n) && n >= 1 ? n : 1;\n}\n\nfunction isActive(row) {\n  return row.active === true || row.active === 'true';\n}\n\n// Mirrors the old validator: a missing or unreadable date reads as expired,\n// never as \"never expires\".\nfunction isExpired(row, now) {\n  const exp = Date.parse(row.expires);\n  return Number.isNaN(exp) || now.getTime() >= exp;\n}\n\nfunction time(value) {\n  const t = Date.parse(value);\n  return Number.isNaN(t) ? 0 : t;\n}\n\n// The `seats` most recently activated devices that are still around.\nfunction seatHolders(entries, seats, now) {\n  const cutoff = now.getTime() - SEAT_WINDOW_DAYS * DAY_MS;\n  return entries\n    .filter((e) => e.kind === 'device' && time(e.last_seen) >= cutoff)\n    .sort((a, b) => time(b.activated_at) - time(a.activated_at)\n      || time(b.last_seen) - time(a.last_seen))\n    .slice(0, seats);\n}\n\nfunction prune(entries, holders, now) {\n  const keepAfter = now.getTime() - KEEP_DAYS * DAY_MS;\n  const holderIds = new Set(holders.map((h) => h.id));\n  const byRecency = (a, b) => time(b.last_seen) - time(a.last_seen);\n\n  const devices = entries\n    .filter((e) => e.kind === 'device')\n    .filter((e) => holderIds.has(e.id) || time(e.last_seen) >= keepAfter);\n  const legacy = entries\n    .filter((e) => e.kind !== 'device')\n    .filter((e) => time(e.last_seen) >= keepAfter)\n    .sort(byRecency)\n    .slice(0, MAX_LEGACY_ENTRIES);\n\n  const kept = devices.concat(legacy);\n  if (kept.length <= MAX_ENTRIES) return kept;\n  const spare = kept\n    .filter((e) => !holderIds.has(e.id))\n    .sort(byRecency)\n    .slice(0, Math.max(0, MAX_ENTRIES - holderIds.size));\n  return kept.filter((e) => holderIds.has(e.id) || spare.includes(e));\n}\n\nfunction validResponse(row, extra) {\n  return Object.assign({\n    valid: true,\n    plan: row.plan || 'pro',\n    expires_at: row.expires || null,\n    is_trial: row.is_trial === true || row.is_trial === 'true',\n    seats: seatCount(row),\n    email: typeof row.email === 'string' ? row.email : null,\n  }, extra);\n}\n\nfunction invalid(reason, message) {\n  return {\n    valid: false,\n    reason: reason,\n    response: { valid: false, reason: reason, message: message },\n    devices: null,\n  };\n}\n\n// Pure: same inputs, same answer. `devices` in the result is the new value\n// for the row's `devices` column, or null when nothing needs writing.\nfunction decide(input) {\n  const row = input.row || {};\n  const query = input.query || {};\n  const headers = input.headers || {};\n  const now = input.now || new Date();\n  const nowIso = now.toISOString();\n\n  if (!row.license_key) {\n    return invalid('unknown_key', 'No licence with this key.');\n  }\n  if (!isActive(row)) {\n    return invalid('inactive', 'This licence has been deactivated.');\n  }\n  if (isExpired(row, now)) {\n    return invalid('expired', 'This licence has expired.');\n  }\n\n  const seats = seatCount(row);\n  const entries = parseDevices(row.devices);\n  const ip = clientIp(headers);\n  const ua = String(headers['user-agent'] || '');\n  const deviceId = normalizeDeviceId(query.device);\n\n  if (!deviceId) {\n    // Pre-seat app: valid as always; note where the request came from.\n    const id = 'ip:' + ip;\n    let entry = entries.find((e) => e.id === id);\n    if (!entry) {\n      entry = { id: id, kind: 'legacy', first_seen: nowIso, hits: 0 };\n      entries.push(entry);\n    }\n    entry.kind = 'legacy';\n    entry.ip = ip;\n    entry.ua = ua;\n    entry.last_seen = nowIso;\n    entry.hits = (Number(entry.hits) || 0) + 1;\n    const holders = seatHolders(entries, seats, now);\n    return {\n      valid: true,\n      reason: 'legacy',\n      response: validResponse(row, { seats_used: holders.length, enforced: false }),\n      devices: prune(entries, holders, now),\n    };\n  }\n\n  let entry = entries.find((e) => e.kind === 'device' && e.id === deviceId);\n  const known = !!entry;\n  // A device this row has never seen is activating, whatever it says: the\n  // app on it has the key, and denying would strand a PC that lost its\n  // record but not its licence.\n  const action = known && query.action === 'revalidate' ? 'revalidate' : 'activate';\n\n  // Device entries carry the app's random per-install id and timestamps,\n  // nothing else: no address, no user agent. The id is all the seat logic\n  // needs, and the row should not become a log of where people were.\n  if (!entry) {\n    entry = { id: deviceId, kind: 'device', first_seen: nowIso };\n    entries.push(entry);\n  }\n  entry.last_seen = nowIso;\n  if (action === 'activate') {\n    entry.activated_at = nowIso;\n    delete entry.denied_at;\n  }\n\n  const holders = seatHolders(entries, seats, now);\n  const holds = holders.some((h) => h.id === deviceId);\n  if (!holds) {\n    entry.denied_at = nowIso;\n    const result = invalid(\n      'seat_taken',\n      'This licence is in use on another PC. Enter the key again here to move it.'\n    );\n    result.response.seats = seats;\n    result.response.seats_used = holders.length;\n    result.devices = prune(entries, holders, now);\n    return result;\n  }\n\n  return {\n    valid: true,\n    reason: action,\n    response: validResponse(row, {\n      seats_used: holders.length,\n      device: deviceId,\n      enforced: true,\n    }),\n    devices: prune(entries, holders, now),\n  };\n}\n\n// --- n8n Code node entry point -------------------------------------------\n// Present only inside n8n; under `node` this falls through to the export.\nif (typeof $input !== 'undefined') {\n  const hook = $('Validate License').first().json || {};\n  const row = $input.first().json || {};\n  const out = decide({ row: row, query: hook.query || {}, headers: hook.headers || {} });\n  return [{\n    json: {\n      response: out.response,\n      verdict: out.reason,\n      write: !!out.devices,\n      row_id: row.id === undefined ? null : row.id,\n      devices: out.devices ? JSON.stringify(out.devices) : null,\n    },\n  }];\n}\n\nmodule.exports = {\n  decide,\n  parseDevices,\n  clientIp,\n  normalizeDeviceId,\n  seatHolders,\n  SEAT_WINDOW_DAYS,\n  KEEP_DAYS,\n  MAX_LEGACY_ENTRIES,\n  MAX_ENTRIES,\n};\n"
+      },
+      "id": "5b1f94b0-a818-4968-bd5b-690d0ce887e6",
+      "name": "Seat check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -388,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.response.toJsonString() }}",
+        "options": {}
+      },
+      "id": "78e77c6e-4fc4-42ad-b65b-6660d3e93509",
+      "name": "Respond verdict",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -168,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a6a0ca0a-9011-4e46-8361-f1b67c9abe4b",
+              "leftValue": "={{ $json.write }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5a6d8170-f777-42a0-a988-e175d7e654a0",
+      "name": "Devices changed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        52,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "IYaVIPxcXhAv6Ob8",
+          "mode": "list",
+          "cachedResultName": "wsl-manager-licenses",
+          "cachedResultUrl": "/projects/HzIG0ZEHlkht6dXK/datatables/IYaVIPxcXhAv6Ob8"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.row_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "devices": "={{ $json.devices }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "devices",
+              "displayName": "devices",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "935d3d57-5e1f-4f5a-b8d0-5067e5c57821",
+      "name": "Store devices",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        272,
+        76
+      ]
+    }
+  ],
+  "connections": {
+    "Stripe Trigger": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Crypto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update row(s)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [],
+        [],
+        [
+          {
+            "node": "Update row(s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crypto": {
+      "main": [
+        [
+          {
+            "node": "Upsert row(s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Query": {
+      "main": [
+        [
+          {
+            "node": "Get user data from DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get user data from DB": {
+      "main": [
+        [
+          {
+            "node": "If license is valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If license is valid": {
+      "main": [
+        [
+          {
+            "node": "Usage is under 50",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid License",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Forward message to AI": {
+      "main": [
+        [
+          {
+            "node": "Respond with AI response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond with AI response": {
+      "main": [
+        [
+          {
+            "node": "Update row(s)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monthly": {
+      "main": [
+        [
+          {
+            "node": "Reset usage of all users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Usage is under 50": {
+      "main": [
+        [
+          {
+            "node": "Forward message to AI",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monthly quota reached",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate License": {
+      "main": [
+        [
+          {
+            "node": "Find licence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find licence": {
+      "main": [
+        [
+          {
+            "node": "Seat check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seat check": {
+      "main": [
+        [
+          {
+            "node": "Respond verdict",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond verdict": {
+      "main": [
+        [
+          {
+            "node": "Devices changed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Devices changed": {
+      "main": [
+        [
+          {
+            "node": "Store devices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

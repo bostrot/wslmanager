@@ -1,40 +1,17 @@
 import 'dart:io';
 
-import 'package:chunked_downloader/chunked_downloader.dart';
+import 'package:wsl2distromanager/api/downloader.dart';
 import 'package:localization/localization.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_static/shelf_static.dart';
 import 'package:wsl2distromanager/api/wsl.dart';
+import 'package:wsl2distromanager/api/wsl_errors.dart';
 import 'package:wsl2distromanager/components/notify.dart';
 import 'helpers.dart';
 
-typedef ChunkedDownloaderFactory = ChunkedDownloader Function({
-  required String url,
-  required String saveFilePath,
-  Map<String, String>? headers,
-  Function(int, int, double)? onProgress,
-  Function(dynamic)? onError,
-});
-
 typedef ServerFactory = Future<HttpServer> Function(
     Handler handler, Object address, int port);
-
-ChunkedDownloader _defaultChunkedDownloaderFactory({
-  required String url,
-  required String saveFilePath,
-  Map<String, String>? headers,
-  Function(int, int, double)? onProgress,
-  Function(dynamic)? onError,
-}) {
-  return ChunkedDownloader(
-    url: url,
-    saveFilePath: saveFilePath,
-    headers: headers,
-    onProgress: onProgress,
-    onError: onError,
-  );
-}
 
 Future<HttpServer> _defaultServerFactory(
     Handler handler, Object address, int port) {
@@ -46,6 +23,11 @@ class Sync {
   late String distroLocation;
   static late HttpServer server;
 
+  /// The distro currently being served, or null. Static like [server] —
+  /// there is one real server — so the per-distro dialog can say which of
+  /// start/stop its button will actually do (audit ST-31).
+  static String? servingDistro;
+
   final WSLApi wslApi;
   final ChunkedDownloaderFactory chunkedDownloaderFactory;
   final ServerFactory serverFactory;
@@ -56,7 +38,7 @@ class Sync {
     ServerFactory? serverFactory,
   })  : wslApi = wslApi ?? WSLApi(),
         chunkedDownloaderFactory =
-            chunkedDownloaderFactory ?? _defaultChunkedDownloaderFactory,
+            chunkedDownloaderFactory ?? defaultChunkedDownloaderFactory,
         serverFactory = serverFactory ?? _defaultServerFactory;
 
   /// Constructor
@@ -67,7 +49,7 @@ class Sync {
     ServerFactory? serverFactory,
   })  : wslApi = wslApi ?? WSLApi(),
         chunkedDownloaderFactory =
-            chunkedDownloaderFactory ?? _defaultChunkedDownloaderFactory,
+            chunkedDownloaderFactory ?? defaultChunkedDownloaderFactory,
         serverFactory = serverFactory ?? _defaultServerFactory;
 
   /// Check if distro has path in settings
@@ -97,6 +79,7 @@ class Sync {
 
     try {
       server = await serverFactory(finalHandler, '0.0.0.0', 59132);
+      servingDistro = distroName;
     } catch (e) {
       // Do nothing
     }
@@ -105,13 +88,15 @@ class Sync {
   /// Stop the server
   void stopServer() {
     server.close();
+    servingDistro = null;
   }
 
   /// Download from sync IP
   Future<void> download() async {
     String? syncIP = prefs.getString('SyncIP');
     if (syncIP == null) {
-      Notify.message('syncipnotset-text'.i18n(), loading: false);
+      Notify.message('syncipnotset-text'.i18n(),
+          severity: InfoBarSeverity.error, loading: false);
       return;
     }
     Notify.message('${'shuttingdownwsl-text'.i18n()}...', loading: true);
@@ -140,7 +125,9 @@ class Sync {
         },
         onError: (error) {
           Notify.message(
-              '${'errordownloading-text'.i18n()} $distroName: $error',
+              '${'syncdownloadfailed-text'.i18n([distroName])} '
+              '${friendlyErrorReason(error)}'.trim(),
+              severity: InfoBarSeverity.error,
               loading: false);
         });
 
@@ -150,7 +137,8 @@ class Sync {
       await Future.delayed(const Duration(milliseconds: 500));
     }
 
-    Notify.message('${'downloaded-text'.i18n()} $distroName');
+    Notify.message('${'downloaded-text'.i18n()} $distroName',
+        severity: InfoBarSeverity.success);
     File oldFile = File(vhdxPath);
     if (await oldFile.exists()) {
       await oldFile.rename(vhdxPathOld);

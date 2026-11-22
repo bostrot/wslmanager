@@ -80,13 +80,14 @@ void main() {
     expect(res, "");
   });
 
-  tearDownAll(() {
-    // Delete the instance
-    api.remove('test');
-    api.remove('test2');
-    templates.deleteTemplate('test');
-    templates.deleteTemplate('test-2');
-    templates.deleteTemplate('test-3');
+  tearDownAll(() async {
+    // Delete the instance. Awaited: unawaited futures here failed the suite
+    // *after* it had completed whenever a template file was already gone.
+    await api.remove('test');
+    await api.remove('test2');
+    await templates.deleteTemplate('test');
+    await templates.deleteTemplate('test-2');
+    await templates.deleteTemplate('test-3');
   });
 
   test('Create template', () async {
@@ -136,5 +137,26 @@ void main() {
     expect(templates.getTemplateDescription('test_rename'), '');
 
     await templates.deleteTemplate('test_renamed');
+  });
+
+  test('Templates on disk are recovered when the prefs list is lost', () async {
+    await templates.saveTemplate('recoverable');
+    expect(templates.getTemplates(), contains('recoverable'));
+
+    // Simulate the preferences file being reset while the .ext4 survives.
+    await prefs.remove('templates');
+
+    expect(templates.getTemplates(), contains('recoverable'));
+    // The recovered list is written back so it survives the next start too.
+    expect(prefs.getStringList('templates'), contains('recoverable'));
+
+    await templates.deleteTemplate('recoverable');
+  });
+
+  test('Templates whose file is gone are dropped from the list', () async {
+    await templates.saveTemplate('vanishing');
+    File(templates.getTemplateFilePath('vanishing')).deleteSync();
+
+    expect(templates.getTemplates(), isNot(contains('vanishing')));
   });
 }
