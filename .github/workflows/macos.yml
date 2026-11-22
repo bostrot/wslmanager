@@ -67,6 +67,11 @@ jobs:
       - name: Run Homebrew cask checks
         run: ./scripts/test_homebrew_cask.sh
 
+      - name: Run Microsoft Store publish checks
+        run: |
+          ./scripts/test_store_pricing.sh
+          ./scripts/test_publish_store.sh
+
       # Developer ID signing and notarization run when the four secrets
       # below exist; without them the build is ad-hoc signed (runs locally
       # and via right-click → Open, but Gatekeeper refuses it on first open).
