@@ -1386,5 +1386,8 @@
   "sale-banner-button": "查看优惠",
   "sale-applied-text": "%s0：立减 %s1，结账时自动应用。",
   "vmconsolelogtooltip-text": "查看控制台日志",
-  "vmnoconsolelog-text": "此虚拟机尚未向控制台输出任何内容。"
+  "vmnoconsolelog-text": "此虚拟机尚未向控制台输出任何内容。",
+  "filterinstances-text": "按名称筛选实例",
+  "filternomatch-text": "没有实例名称包含“%s”。",
+  "clearfilter-text": "清除筛选"
 }

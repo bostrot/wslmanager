@@ -1385,5 +1385,8 @@
   "sale-banner-button": "Teklifi gör",
   "sale-applied-text": "%s0: %s1 indirim, ödeme sırasında uygulanır.",
   "vmconsolelogtooltip-text": "Konsol günlüğünü görüntüle",
-  "vmnoconsolelog-text": "Bu VM henüz konsoluna hiçbir şey yazmadı."
+  "vmnoconsolelog-text": "Bu VM henüz konsoluna hiçbir şey yazmadı.",
+  "filterinstances-text": "Örnekleri ada göre filtrele",
+  "filternomatch-text": "Hiçbir örnek adı \"%s\" içermiyor.",
+  "clearfilter-text": "Filtreyi temizle"
 }
