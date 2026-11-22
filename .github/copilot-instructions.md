@@ -52,8 +52,9 @@ Always reference these instructions first and fallback to search or bash command
 - One author only: `Eric Trenkel <eric@bostrot.com>`. No `Co-Authored-By:` trailers.
 - No tool attribution anywhere -- no "Generated with", no session links, no bot
   signatures, no emoji footers, in commit messages or PR descriptions.
-- Conventional Commits, matching existing history: `type(scope): short description`
-  using `feat`, `fix`, `refactor`, `docs`, `ci`, `test`, `chore`.
+- Commit subjects and PR titles are plain sentences starting with an uppercase
+  letter that say what changed, e.g. `Filter the home instance list by name`.
+  No Conventional Commits prefixes (`feat(ui):`, `fix:`, `docs:`, ...).
 - Keep the subject short, imperative and descriptive, with no trailing period.
   Add a body only when the reason is not obvious from the subject.
 
