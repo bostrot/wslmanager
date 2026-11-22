@@ -55,23 +55,25 @@ Copilot, opencode, anything else.
   session links, no bot signatures, no emoji footers — not in commit messages
   and not in PR descriptions. A reader should not be able to tell which tool
   wrote the change.
-- **Conventional Commits**, matching the existing history:
-  `type(scope): short description in lower case`
-  Types in use: `feat`, `fix`, `refactor`, `docs`, `ci`, `test`, `chore`.
-  Scope is optional — use it when it narrows things usefully (`fix(ui):`,
-  `feat(license):`, `fix(i18n):`).
+- **Plain sentences, no prefixes.** Commit subjects and PR titles are plain
+  sentences that start with an uppercase letter and say what changed, e.g.
+  `Filter the home instance list by name`. No Conventional Commits prefixes
+  (`feat(ui):`, `fix:`, `docs:`, …). Older history uses them; leave it be.
 - **Short and descriptive.** One line, imperative, no trailing period. Say what
   changed and why it matters, not which files moved.
 - Add a body only when the *why* is not obvious from the subject. Wrap at ~72
   characters. No checklists, no summaries of the diff.
+- Release notes are GitHub's generated notes (`gh release create
+  --generate-notes` in `releaser.yml`), built from merged PR titles, so the PR
+  title is what ends up in the changelog.
 
-Recent examples to match:
+Examples to match:
 
 ```
-fix(ui): repair broken locales and unreadable copy across the app
-feat(license): drop the legacy Pro thank-you claim
-ci: pin Flutter SDK and upgrade re_editor to fix broken builds
-refactor: trim over-explanatory comments
+Filter the home instance list by name
+Ask Store installs to rate through the native rating sheet
+Pin the Flutter SDK and upgrade re_editor to fix broken builds
+Trim over-explanatory comments
 ```
 
 ## Build Order (CI)
