@@ -29,9 +29,19 @@ on:
         type: string
   release:
     types: [published, created]
+  # Daily catch-up, outside the 08:00-20:00 commit window. A release whose
+  # publish was blocked — by a submission pending in certification (v2.6.1,
+  # 2026-11-19), an outage or an expired secret — used to stay off the Store
+  # until somebody noticed. This run publishes the latest release whenever
+  # the Store is behind it, and is a no-op when it is not
+  # (scripts/publish_store.sh compares versions before writing anything).
+  schedule:
+    - cron: '41 3 * * *'
 
+# One group for every tag: the Store allows a single pending submission, so
+# two publishes can never usefully overlap.
 concurrency:
-  group: publish-store-${{ github.event.release.tag_name || inputs.tag }}
+  group: publish-store
   cancel-in-progress: false
 
 jobs:
@@ -44,6 +54,9 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG="${{ inputs.tag }}"
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
+            # The latest full release; drafts and prereleases are skipped.
+            TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
           else
             TAG="${{ github.event.release.tag_name }}"
           fi
@@ -54,15 +67,26 @@ jobs:
           fi
 
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - uses: actions/checkout@v4
         with:
           sparse-checkout: |
             scripts/publish_store.sh
             scripts/store_pricing.jq
+            scripts/test_publish_store.sh
+            scripts/test_store_pricing.sh
             store/pricing.json
             store/pricing-paid.json
           sparse-checkout-cone-mode: false
+
+      # Offline, against a fake API: a broken script fails here, before it
+      # can reach the real Store.
+      - name: Check the publish script
+        run: |
+          scripts/test_store_pricing.sh
+          scripts/test_publish_store.sh
 
       - name: Download release asset
         uses: dsaltares/fetch-gh-release-asset@master
@@ -79,14 +103,19 @@ jobs:
       # to it with mode=dry-run before pointing a release at it. A release
       # — the Releaser's dispatch, or a release event — always states
       # store/pricing.json, so the listing's price lives in git, not in
-      # whatever the clone happens to say.
+      # whatever the clone happens to say; so does the daily catch-up.
+      #
+      # A pending draft is adopted, one already in certification ends the run
+      # green as "deferred" with a warning (the catch-up publishes once it
+      # clears), and a version the Store already has is a no-op. The outcome
+      # is in the job summary.
       - name: Publish to Store
         env:
           STORE_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
           STORE_CLIENT_ID: ${{ secrets.AZURE_AD_APPLICATION_CLIENT_ID }}
           STORE_CLIENT_SECRET: ${{ secrets.AZURE_AD_APPLICATION_SECRET }}
           STORE_APP_ID: ${{ secrets.STORE_APP_ID }}
-          PRICING_FILE: ${{ github.event_name == 'release' && 'store/pricing.json' || inputs.pricing_file }}
+          PRICING_FILE: ${{ github.event_name != 'workflow_dispatch' && 'store/pricing.json' || inputs.pricing_file }}
           DRY_RUN: ${{ inputs.mode == 'dry-run' && '1' || '0' }}
         run: |
           scripts/publish_store.sh \

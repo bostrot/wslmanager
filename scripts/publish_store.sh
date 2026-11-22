@@ -32,6 +32,27 @@
 # nothing is uploaded and nothing is committed. Run it after any pricing
 # change and before trusting a release to it.
 #
+# A pending submission is never deleted (see below), but it no longer simply
+# stops the run either — v2.6.1 never reached the Store because one did
+# (2026-11-19), and nothing ran the publish again. What happens instead
+# depends on its status:
+#   PendingCommit   an uncommitted draft, typically a listing edit made in
+#                   Partner Center. It is adopted: its packages are swapped
+#                   for this one and it is committed. Everything else on it
+#                   (listings, notes) rides along untouched.
+#   in flight       committed and somewhere between pre-processing and
+#                   release. The API cannot cancel it, so the run ends green
+#                   as "deferred" with a warning; the workflow's daily
+#                   catch-up publishes once it has cleared.
+#   anything else   a failed submission somebody has to look at. Refused.
+# And when the Store already carries this version (live, or in flight) the
+# run is a no-op, so running it again — by hand or from the daily catch-up —
+# never produces a second submission.
+#
+# Outcome: printed, and when run under GitHub Actions also written as the
+# step output `result` (published, adopted, deferred, already-submitted,
+# up-to-date, dry-run) and to the job summary.
+#
 # Required environment:
 #   STORE_TENANT_ID  STORE_CLIENT_ID  STORE_CLIENT_SECRET  STORE_APP_ID
 # Optional environment:
@@ -39,7 +60,8 @@
 #                 the clone's pricing must round-trip on its own (see above)
 #   DRY_RUN=1     create, PUT, read back, report, delete; never upload/commit
 # Argument:
-#   $1  path to the .msix to publish (still required in a dry run, unused)
+#   $1  path to the .msix to publish (its manifest version is what is
+#       compared against the Store's; nothing is uploaded in a dry run)
 set -euo pipefail
 
 MSIX_PATH="${1:?usage: publish_store.sh <path-to-msix>}"
@@ -85,29 +107,110 @@ TOKEN=$(curl -sS -X POST "https://login.microsoftonline.com/$STORE_TENANT_ID/oau
   | jq -r '.access_token // empty')
 [ -n "$TOKEN" ] || { echo "Could not obtain an access token" >&2; exit 1; }
 
-# A pending submission is not ours to remove: it may be the previous release
-# still in certification, or a draft somebody is editing in Partner Center.
-# Whoever owns it decides; this run just says so and stops.
-PENDING=$(request GET "$API/$STORE_APP_ID" | jq -r '.pendingApplicationSubmission.id // empty')
-if [ -n "$PENDING" ]; then
-  echo "Submission $PENDING is pending (in certification, or a Partner Center draft)." >&2
-  echo "Not deleting it. Let it finish or remove it by hand, then re-run." >&2
-  echo "https://partner.microsoft.com/dashboard/products/$STORE_APP_ID/submissions/$PENDING" >&2
-  exit 1
+# Ends the run with an outcome a workflow can read. `warn` makes it a yellow
+# annotation rather than a plain line, for the outcomes somebody should see.
+finish() {
+  local result="$1" message="$2" level="${3:-notice}"
+  echo "$message"
+  if [ -n "${GITHUB_ACTIONS:-}" ]; then
+    [ "$level" = "warn" ] && echo "::warning title=Microsoft Store::$message"
+    [ -n "${GITHUB_OUTPUT:-}" ] && echo "result=$result" >> "$GITHUB_OUTPUT"
+    [ -n "${GITHUB_STEP_SUMMARY:-}" ] \
+      && printf '### Microsoft Store: %s\n\n%s\n' "$result" "$message" >> "$GITHUB_STEP_SUMMARY"
+  fi
+  exit 0
+}
+
+# Highest version among the packages a submission keeps (a package already
+# marked PendingDelete is on its way out). Empty when it has none.
+package_version() {
+  jq -r '[ (.applicationPackages // [])[]
+           | select(.fileStatus != "PendingDelete") | .version // empty ]
+         | .[]' | sort -V | tail -n 1
+}
+# version_ge A B: A is B or newer.
+version_ge() {
+  [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n 1)" = "$1" ]
+}
+
+# The version this run publishes, from the package's own manifest rather than
+# the tag, so the comparison is with what the Store will actually be sent.
+VERSION=$(unzip -p "$MSIX_PATH" AppxManifest.xml | tr -d '\r\n' \
+  | grep -o '<Identity[^>]*>' | grep -o ' Version="[^"]*"' | head -n 1 | cut -d'"' -f2 || true)
+[ -n "$VERSION" ] || { echo "$MSIX_PATH: no Identity Version in AppxManifest.xml" >&2; exit 1; }
+
+APP=$(request GET "$API/$STORE_APP_ID")
+LIVE=$(jq -r '.lastPublishedApplicationSubmission.id // empty' <<<"$APP")
+PENDING=$(jq -r '.pendingApplicationSubmission.id // empty' <<<"$APP")
+SUBMISSIONS_URL="https://partner.microsoft.com/dashboard/products/$STORE_APP_ID/submissions"
+
+LIVE_VERSION=""
+[ -z "$LIVE" ] || LIVE_VERSION=$(request GET "$API/$STORE_APP_ID/submissions/$LIVE" | package_version)
+echo "Publishing $VERSION; the Store's live version is ${LIVE_VERSION:-<none>}."
+# A dry run is about the pricing round trip, which is worth proving whatever
+# version is live, so it skips this check and the in-flight one below.
+if [ "${DRY_RUN:-0}" != "1" ] && [ -n "$LIVE_VERSION" ] && version_ge "$LIVE_VERSION" "$VERSION"; then
+  finish up-to-date "The Store already serves $LIVE_VERSION (submission $LIVE); nothing to publish for $VERSION."
 fi
 
-echo "Creating submission..."
-SUBMISSION=$(request POST "$API/$STORE_APP_ID/submissions")
-SUBMISSION_ID=$(jq -r '.id' <<<"$SUBMISSION")
-UPLOAD_URL=$(jq -r '.fileUploadUrl' <<<"$SUBMISSION")
-[ -n "$SUBMISSION_ID" ] && [ "$SUBMISSION_ID" != "null" ] || {
-  echo "The API returned no submission id" >&2; exit 1; }
+# A pending submission is never ours to remove: it may be the previous
+# release still in certification (deleting one lost a release on
+# 2026-09-08), or a draft carrying somebody's listing edits.
+ADOPTED=""
+if [ -n "$PENDING" ]; then
+  PENDING_SUBMISSION=$(request GET "$API/$STORE_APP_ID/submissions/$PENDING")
+  PENDING_STATUS=$(jq -r '.status // "unknown"' <<<"$PENDING_SUBMISSION")
+  PENDING_VERSION=$(package_version <<<"$PENDING_SUBMISSION")
+  echo "Submission $PENDING is pending: $PENDING_STATUS, package ${PENDING_VERSION:-<none>}."
+  case "$PENDING_STATUS" in
+    PendingCommit)
+      if [ "${DRY_RUN:-0}" = "1" ]; then
+        finish dry-run "DRY RUN: would adopt draft submission $PENDING and swap its packages for $VERSION. Nothing was changed: a dry run never writes to a submission it did not create."
+      fi
+      ADOPTED="$PENDING"
+      SUBMISSION="$PENDING_SUBMISSION"
+      ;;
+    CommitStarted|PreProcessing|Certification|Release|PendingPublication|Publishing)
+      if [ "${DRY_RUN:-0}" = "1" ]; then
+        finish dry-run "DRY RUN: not possible while submission $PENDING is $PENDING_STATUS; the API allows one pending submission. Re-run once it has cleared." warn
+      fi
+      if [ -n "$PENDING_VERSION" ] && version_ge "$PENDING_VERSION" "$VERSION"; then
+        finish already-submitted "Submission $PENDING already carries $PENDING_VERSION and is $PENDING_STATUS; nothing to publish for $VERSION. $SUBMISSIONS_URL/$PENDING"
+      fi
+      # The legacy API has no cancel endpoint, so there is nothing to do but
+      # wait; the scheduled run of the workflow picks the release up once
+      # this one has cleared.
+      finish deferred "Deferred: submission $PENDING (${PENDING_VERSION:-no package}) is $PENDING_STATUS and the API cannot cancel it. $VERSION will be published by the daily catch-up once it clears, or cancel it in Partner Center and re-run. $SUBMISSIONS_URL/$PENDING" warn
+      ;;
+    *)
+      echo "Submission $PENDING is $PENDING_STATUS. Not touching it: look at it in Partner Center, fix or delete it, then re-run." >&2
+      echo "$SUBMISSIONS_URL/$PENDING" >&2
+      exit 1
+      ;;
+  esac
+fi
 
-# From here on a failure would strand a pending submission, so clean it up.
-cleanup_submission() {
-  echo "Removing the half-finished submission $SUBMISSION_ID..." >&2
-  request DELETE "$API/$STORE_APP_ID/submissions/$SUBMISSION_ID" >/dev/null 2>&1 || true
-}
+if [ -n "$ADOPTED" ]; then
+  echo "Adopting draft submission $ADOPTED..."
+  SUBMISSION_ID="$ADOPTED"
+  # The draft holds somebody's work, so a failure leaves it where it is
+  # (with whatever package state the API recorded) instead of deleting it.
+  cleanup_submission() {
+    echo "Leaving draft submission $SUBMISSION_ID in place; finish it in Partner Center: $SUBMISSIONS_URL/$SUBMISSION_ID" >&2
+  }
+else
+  echo "Creating submission..."
+  SUBMISSION=$(request POST "$API/$STORE_APP_ID/submissions")
+  SUBMISSION_ID=$(jq -r '.id' <<<"$SUBMISSION")
+  [ -n "$SUBMISSION_ID" ] && [ "$SUBMISSION_ID" != "null" ] || {
+    echo "The API returned no submission id" >&2; exit 1; }
+  # From here on a failure would strand a pending submission, so clean it up.
+  cleanup_submission() {
+    echo "Removing the half-finished submission $SUBMISSION_ID..." >&2
+    request DELETE "$API/$STORE_APP_ID/submissions/$SUBMISSION_ID" >/dev/null 2>&1 || true
+  }
+fi
+UPLOAD_URL=$(jq -r '.fileUploadUrl' <<<"$SUBMISSION")
 trap 'cleanup_submission; rm -rf "$WORK"' EXIT
 
 MSIX_NAME="$(basename "$MSIX_PATH")"
@@ -190,8 +293,7 @@ if [ "${DRY_RUN:-0}" = "1" ]; then
   request DELETE "$API/$STORE_APP_ID/submissions/$SUBMISSION_ID" >/dev/null
   trap 'rm -rf "$WORK"' EXIT
   if [ "$SENT_PRICING" = "$GOT_PRICING" ] && [ "$(jq -r .priceId <<<"$GOT_PRICING")" != "Base" ]; then
-    echo "DRY RUN OK: the API stored the pricing exactly as sent. Dry-run submission deleted."
-    exit 0
+    finish dry-run "DRY RUN OK: the API stored the pricing exactly as sent. Dry-run submission deleted."
   fi
   echo "DRY RUN FAILED: the API did not store the pricing as sent. Dry-run submission deleted." >&2
   exit 1
@@ -216,4 +318,7 @@ case "$STATUS" in
   *) echo "Unexpected status after commit: $STATUS" >&2; exit 1 ;;
 esac
 
-echo "https://partner.microsoft.com/dashboard/products/$STORE_APP_ID/submissions/$SUBMISSION_ID"
+if [ -n "$ADOPTED" ]; then
+  finish adopted "Adopted draft submission $SUBMISSION_ID with $VERSION; it is now $STATUS. $SUBMISSIONS_URL/$SUBMISSION_ID"
+fi
+finish published "Submission $SUBMISSION_ID with $VERSION is now $STATUS. $SUBMISSIONS_URL/$SUBMISSION_ID"
