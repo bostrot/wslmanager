@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:fluent_ui/fluent_ui.dart' show Locale;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:localization/localization.dart';
 import 'package:plausible_analytics/plausible_analytics.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wsl2distromanager/api/templates.dart';
@@ -114,6 +117,25 @@ void main() {
 
     expect(prefs.getStringList('templates'), ['test', 'test-2']);
     expect(File('${tempDir.path}/templates/test-2.ext4').existsSync(), true);
+  });
+
+  test('saveTemplate names the template inside one translated sentence',
+      () async {
+    // The name used to be glued in front of a translated fragment, which
+    // read "test Saving as template ...." in English and left translators
+    // no way to put the name where their grammar wants it.
+    MapLocalization.delegate.translations[const Locale('en')] =
+        json.decode(File('lib/i18n/en.json').readAsStringSync())
+            as Map<String, dynamic>;
+    await MapLocalization.delegate.load(const Locale('en'));
+    addTearDown(() => MapLocalization.delegate.load(const Locale('xx')));
+
+    await templates.saveTemplate('test');
+
+    expect(statusMessages, [
+      'Saving test as a template...',
+      'test was saved as a template.',
+    ]);
   });
 
   test('useTemplate calls import', () async {

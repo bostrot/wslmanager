@@ -38,14 +38,14 @@ class Templates {
     }
 
     plausible.event(name: "wsl_saveastemplate");
-    Notify.message('$templateName ${'savingastemplate-text'.i18n()}.',
+    Notify.message('savingtemplate-text'.i18n([templateName]),
         loading: true);
     await wslApi.export(
         name, getTemplatePath().file('$templateName.$extension'));
     templates ??= [];
     templates.add(templateName);
     prefs.setStringList('templates', templates);
-    Notify.message('$templateName ${'savedastemplate-text'.i18n()}.',
+    Notify.message('savedtemplate-text'.i18n([templateName]),
         severity: InfoBarSeverity.success,
         duration: const Duration(seconds: 3));
   }
