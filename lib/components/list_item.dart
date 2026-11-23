@@ -383,7 +383,7 @@ class _ListItemState extends State<ListItem> {
       Notify.message('stoppinginstance-text'.i18n([distroLabel(widget.item)]),
           loading: true);
       await api.stop(widget.item);
-      Notify.message('${widget.item} ${'stopped-text'.i18n()}.',
+      Notify.message('instancestopped-text'.i18n([distroLabel(widget.item)]),
           severity: InfoBarSeverity.success,
           loading: false,
           duration: const Duration(seconds: 3));
@@ -429,7 +429,7 @@ class _ListItemState extends State<ListItem> {
       if (backend is AppleVmApi) {
         unawaited(backend.primeGuestGreeting(widget.item));
       }
-      Notify.message('${widget.item} ${'started-text'.i18n()}.',
+      Notify.message('instancestarted-text'.i18n([distroLabel(widget.item)]),
           severity: InfoBarSeverity.success,
           duration: const Duration(seconds: 3));
       recordSuccessfulAction();

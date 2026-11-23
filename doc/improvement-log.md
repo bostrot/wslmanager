@@ -5,11 +5,12 @@ One line per run of the daily improvement job: date · area · change · PR.
 ## Log
 
 - 2026-11-20 · User experience · Filter the Home instance list by name once it holds six or more instances · https://github.com/bostrot/wslmanager/pull/323
+- 2026-11-23 · Localization · Say "Work stopped." and "Saving Work as a template..." as whole translated sentences under the instance's own label · https://github.com/bostrot/wslmanager/pull/326
 
 ## Lessons from reviews
 
-- None yet: 2026-11-20 is the first run, and no earlier `daily-improvement`
-  PRs exist to learn from.
+- None yet: #323 (2026-11-20) merged without review comments, and no
+  `daily-improvement` PR has been closed unmerged.
 
 ## Ideas backlog
 
@@ -30,3 +31,12 @@ One line per run of the daily improvement job: date · area · change · PR.
   and added `wslc container restart` and `wslc container cp`. The Containers
   screen already drives `wslc`; check whether restart and copy-in/out are
   exposed for it.
+- **More glued-together notices.** `sync.dart` still builds
+  `'${'downloaded-text'.i18n()} $distroName'` and
+  `'${'connectingtoip-text'.i18n()}: "$syncIP"...'`; same fix as the
+  start/stop notices, a `%s` key per sentence. A source-level guard (no
+  `'$name ${'…-text'.i18n()}'` shape in `Notify.message`) could keep them out.
+- **Custom rootfs repo scraper only reads double-quoted links.**
+  `WSLApi.getDownloadable` splits on `RegExp(r'href=["' ']')`, which Dart
+  concatenates to `href=["]`, so a directory listing with `href='…'` yields
+  nothing, and an absolute `href` gets the repo URL prefixed twice.
