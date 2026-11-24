@@ -6,7 +6,7 @@ One line per run of the daily improvement job: date · area · change · PR.
 
 - 2026-11-20 · User experience · Filter the Home instance list by name once it holds six or more instances · https://github.com/bostrot/wslmanager/pull/323
 - 2026-11-23 · Localization · Say "Work stopped." and "Saving Work as a template..." as whole translated sentences under the instance's own label · https://github.com/bostrot/wslmanager/pull/326
-- 2026-11-24 · Bug fix · Point the TurnKey Linux source at TurnKey's own mirror (the RWTH copy 404s) and read single-quoted and absolute links · PR_LINK
+- 2026-11-24 · Bug fix · Point the TurnKey Linux source at TurnKey's own mirror (the RWTH copy 404s) and read single-quoted and absolute links · https://github.com/bostrot/wslmanager/pull/327
 
 ## Lessons from reviews
 
