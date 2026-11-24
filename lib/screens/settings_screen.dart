@@ -22,6 +22,7 @@ import 'package:wsl2distromanager/api/license_manager.dart';
 import 'package:wsl2distromanager/api/mcp/cloudflare_tunnel_service.dart';
 import 'package:wsl2distromanager/api/mcp/wsl_mcp_service.dart';
 import 'package:wsl2distromanager/api/remote_target.dart';
+import 'package:wsl2distromanager/api/rootfs_repo.dart';
 import 'package:wsl2distromanager/api/web/web_dashboard_service.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -335,7 +336,11 @@ class SettingsPageState extends State<SettingsPage> {
       _syncPasswordController.text = syncPassword;
     }
     String? repoLink = prefs.getString('RepoLink');
-    if (repoLink != null && repoLink != '') {
+    // A retired default is shown as the placeholder it stands for, so the
+    // next Save drops it instead of writing the dead mirror back.
+    if (repoLink != null &&
+        repoLink != '' &&
+        !retiredRepoLinks.contains(repoLink.trim())) {
       _repoTextController.text = repoLink;
     }
     if (prefs.containsKey('DockerRepoLink')) {
@@ -2288,7 +2293,7 @@ class SettingsPageState extends State<SettingsPage> {
             labelStyle: const TextStyle(fontWeight: FontWeight.w500),
             child: TextBox(
               controller: _repoTextController,
-              placeholder: defaultRepoLink,
+              placeholder: turnkeyRepoLink,
             ),
           ),
         ),

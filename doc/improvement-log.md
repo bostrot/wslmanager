@@ -6,10 +6,11 @@ One line per run of the daily improvement job: date · area · change · PR.
 
 - 2026-11-20 · User experience · Filter the Home instance list by name once it holds six or more instances · https://github.com/bostrot/wslmanager/pull/323
 - 2026-11-23 · Localization · Say "Work stopped." and "Saving Work as a template..." as whole translated sentences under the instance's own label · https://github.com/bostrot/wslmanager/pull/326
+- 2026-11-24 · Bug fix · Point the TurnKey Linux source at TurnKey's own mirror (the RWTH copy 404s) and read single-quoted and absolute links · PR_LINK
 
 ## Lessons from reviews
 
-- None yet: #323 (2026-11-20) merged without review comments, and no
+- None yet: #323 and #326 merged without review comments, and no
   `daily-improvement` PR has been closed unmerged.
 
 ## Ideas backlog
@@ -36,7 +37,13 @@ One line per run of the daily improvement job: date · area · change · PR.
   `'${'connectingtoip-text'.i18n()}: "$syncIP"...'`; same fix as the
   start/stop notices, a `%s` key per sentence. A source-level guard (no
   `'$name ${'…-text'.i18n()}'` shape in `Notify.message`) could keep them out.
-- **Custom rootfs repo scraper only reads double-quoted links.**
-  `WSLApi.getDownloadable` splits on `RegExp(r'href=["' ']')`, which Dart
-  concatenates to `href=["]`, so a directory listing with `href='…'` yields
-  nothing, and an absolute `href` gets the repo URL prefixed twice.
+- **Tidy TurnKey names.** Scraped names keep the version and a trailing
+  space (`Debian 12 Turnkey Core 18.0 `), and the mirror lists Debian 11 and
+  12 builds of each appliance side by side. Renaming changes the cache file
+  a download is stored under (`rootfsDisplayName`), so it needs a migration.
+- **`defaultRepoLink` in `constants.dart` is now unused** (the live default
+  is `turnkeyRepoLink` in `lib/api/rootfs_repo.dart`). Remove it the next time
+  `constants.dart` is changed by hand on purpose.
+- **Dead-source feedback.** A repo that answers 404 only shows Dio's raw
+  exception text through `Notify.message` with info severity; it deserves a
+  translated "this listing could not be read" with `severity: error`.
