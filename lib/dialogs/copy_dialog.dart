@@ -10,7 +10,7 @@ import 'package:wsl2distromanager/components/helpers.dart';
 
 /// Copy Dialog
 /// @param item: distro name
-copyDialog(item) async {
+copyDialog(item, {BuildContext? hostContext}) async {
   final VmBackend api = vmBackend();
   plausible.event(page: 'copy');
   // Fetched before the dialog opens so the validator below can refuse a
@@ -24,6 +24,10 @@ copyDialog(item) async {
   }
   dialog(
       item: item,
+      // Checked again: the list is read before the dialog can open.
+      hostContext: hostContext != null && hostContext.mounted
+          ? hostContext
+          : null,
       title: '${'copy-text'.i18n()} \'$item\'',
       // A copy is an export + import (or a VHD copy) of the whole distro, and
       // it stops the source first. None of that was said anywhere before the

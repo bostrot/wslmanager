@@ -8,6 +8,7 @@ One line per run of the daily improvement job: date · area · change · PR.
 - 2026-11-23 · Localization · Say "Work stopped." and "Saving Work as a template..." as whole translated sentences under the instance's own label · https://github.com/bostrot/wslmanager/pull/326
 - 2026-11-24 · Bug fix · Point the TurnKey Linux source at TurnKey's own mirror (the RWTH copy 404s) and read single-quoted and absolute links · https://github.com/bostrot/wslmanager/pull/327
 - 2026-11-25 · User experience · Ctrl+F (Cmd+F on macOS) jumps to the Home instance filter, F5 reloads the list · https://github.com/bostrot/wslmanager/pull/328
+- 2026-11-25 · User experience · Default keyboard shortcuts: Ctrl+N, Ctrl+,, Ctrl+1…9, Ctrl+Tab, F1, a Ctrl+/ cheat sheet, and arrow-key selection with Enter, F2, Delete, Ctrl+D, Ctrl+Shift+T/S on Home · https://github.com/bostrot/wslmanager/pull/329
 
 ## Lessons from reviews
 
@@ -43,10 +44,9 @@ One line per run of the daily improvement job: date · area · change · PR.
 - **Dead-source feedback.** A repo that answers 404 only shows Dio's raw
   exception text through `Notify.message` with info severity; it deserves a
   translated "this listing could not be read" with `severity: error`.
-- **Show the Home shortcuts somewhere.** Ctrl+F and F5 on Home are not
-  discoverable. A keyboard-shortcuts list (Settings → About, or a `?`
-  flyout) would cover them and the AI dock's arrow-key nudge. Needs one new
-  string per shortcut in all `lib/i18n/*.json`.
+- **Ctrl+E / Ctrl+I.** Not bound: no instance has an export action of its
+  own (Save as template is the closest), and importing lives inside Add
+  instance, which Ctrl+N already opens. Bind them if either gets a button.
 - **`_indicatesMissingDistro` in `ai_workspace/service.dart`** treats any
   stderr containing `not found` or the distro's own name as "distro
   missing", and that result is persisted as a confirmed `notInstalled`. An

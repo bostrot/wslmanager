@@ -16,6 +16,7 @@ import 'package:wsl2distromanager/components/ai_diagnosis.dart';
 import 'package:wsl2distromanager/components/notify.dart';
 import 'analytics.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/gestures.dart' show kDoubleTapTimeout;
 import 'package:wsl2distromanager/components/helpers.dart';
 import 'package:wsl2distromanager/dialogs/dialogs.dart';
 import 'package:wsl2distromanager/dialogs/file_transfer_dialog.dart';
@@ -24,6 +25,7 @@ import 'package:wsl2distromanager/dialogs/vm_credentials_dialog.dart';
 import 'package:wsl2distromanager/dialogs/vm_resize_dialog.dart';
 import 'package:wsl2distromanager/dialogs/vm_resources_dialog.dart';
 import 'package:wsl2distromanager/dialogs/volume_mounts_dialog.dart';
+import 'package:wsl2distromanager/nav/keyboard_shortcuts.dart';
 
 /// Builder for the WSL Distro List Items. Each item is an expander with [item]
 /// as the title and [trailing] as the trailing text. [running] is a list of
@@ -38,15 +40,32 @@ class ListItem extends StatefulWidget {
       {super.key,
       required this.item,
       required this.running,
-      required this.trailing});
+      required this.trailing,
+      this.selected = false,
+      this.onSelect,
+      this.rows});
   final List<String> running;
   final String item;
   final String trailing;
+
+  /// The row the list's keys act on (Enter, F2, Delete, ...).
+  final bool selected;
+
+  /// A pointer went down on the row, so it becomes the selection.
+  final VoidCallback? onSelect;
+
+  /// Where the list finds this row's state to run a key on it. Not a
+  /// [GlobalKey]: the row's [ValueKey] is what keeps its state attached to
+  /// its instance while the filter moves it.
+  final Map<String, ListItemState>? rows;
+
   @override
-  State<ListItem> createState() => _ListItemState();
+  State<ListItem> createState() => ListItemState();
 }
 
-class _ListItemState extends State<ListItem> {
+/// Public so the list can run a row's actions from the keyboard on the row
+/// that owns their busy state, instead of a second copy of each action.
+class ListItemState extends State<ListItem> {
   final VmBackend api = vmBackend();
   Map<String, bool> hover = {};
   bool isSyncing = false;
@@ -80,10 +99,69 @@ class _ListItemState extends State<ListItem> {
       FocusNode(skipTraversal: true, debugLabel: 'row-meta');
 
   @override
+  void initState() {
+    super.initState();
+    widget.rows?[widget.item] = this;
+  }
+
+  @override
   void dispose() {
+    if (widget.rows?[widget.item] == this) widget.rows?.remove(widget.item);
     _metaFocus.dispose();
     super.dispose();
   }
+
+  /// The pointer-down before this one on the name, for the double-click.
+  /// A raw [Listener] rather than a double-tap recognizer: that one holds the
+  /// gesture arena for the double-tap timeout, so every single click would
+  /// have expanded the row 300ms late.
+  DateTime? _lastNameDown;
+
+  void _onNameDown(PointerDownEvent event) {
+    final now = DateTime.now();
+    final last = _lastNameDown;
+    if (last != null && now.difference(last) <= kDoubleTapTimeout) {
+      _lastNameDown = null;
+      openOrStart();
+    } else {
+      _lastNameDown = now;
+    }
+  }
+
+  /// What the row's first button does: start a stopped instance, or open
+  /// another terminal on a running one. Enter and a double-click on the name.
+  void openOrStart() {
+    if (isBusy) return;
+    if (api.features.serialConsole && isRunning(widget.item, widget.running)) {
+      openTerminal();
+    } else {
+      startInstance();
+    }
+  }
+
+  /// Ctrl+Shift+T. On WSL starting is opening a terminal; a VM has its own
+  /// terminal path in either state (the console button's, when stopped).
+  void openTerminalShortcut() {
+    if (isBusy) return;
+    if (!api.features.serialConsole) {
+      startInstance();
+    } else if (isRunning(widget.item, widget.running)) {
+      openTerminal();
+    } else {
+      openConsole();
+    }
+  }
+
+  void stopShortcut() {
+    if (isBusy || !isRunning(widget.item, widget.running)) return;
+    stopInstance();
+  }
+
+  void rename() => renameInstanceDialog(widget.item, hostContext: context);
+
+  void duplicate() => copyDialog(widget.item, hostContext: context);
+
+  void delete() => deleteInstanceDialog(api, widget.item, hostContext: context);
 
   void syncing(var item) {
     setState(() {
@@ -112,9 +190,21 @@ class _ListItemState extends State<ListItem> {
 
   @override
   Widget build(BuildContext context) {
+    final accent = FluentTheme.of(context).accentColor;
     return Padding(
       padding: const EdgeInsets.only(top: 8.0, left: 12.0, right: 12.0),
-      child: watchFocus(
+      child: Listener(
+        onPointerDown: (_) => widget.onSelect?.call(),
+        child: Semantics(
+          selected: widget.selected,
+          child: Container(
+            foregroundDecoration: widget.selected
+                ? BoxDecoration(
+                    border: Border.all(color: accent, width: 2.0),
+                    borderRadius: BorderRadius.circular(6.0),
+                  )
+                : null,
+            child: watchFocus(
         // The ring the header would have drawn round its chevron is switched
         // off and redrawn around the whole row; the buttons inside restore the
         // theme's ring by merging an empty override over the suppression.
@@ -136,6 +226,9 @@ class _ListItemState extends State<ListItem> {
         ),
         (focused) => rowFocused = focused,
       ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -151,9 +244,11 @@ class _ListItemState extends State<ListItem> {
             // promised the wrong thing (audit LN-26).
             MergeSemantics(
               child: Tooltip(
-                message: isRunning(widget.item, widget.running)
-                    ? 'openterminal-text'.i18n()
-                    : 'start-text'.i18n(),
+                message: withShortcut(
+                    isRunning(widget.item, widget.running)
+                        ? 'openterminal-text'.i18n()
+                        : 'start-text'.i18n(),
+                    AppKeys.open),
                 child: MouseRegion(
                   cursor: SystemMouseCursors.click,
                   child: IconButton(
@@ -171,18 +266,11 @@ class _ListItemState extends State<ListItem> {
                             size: 16.0),
                     onPressed: isBusy
                         ? null
-                        : () {
-                            // On the Apple backend the promise this button
-                            // makes while running — "open terminal" — is the
-                            // serial console; start (with the VM's display)
-                            // is only for bringing a stopped VM up.
-                            if (api.features.serialConsole &&
-                                isRunning(widget.item, widget.running)) {
-                              openTerminal();
-                            } else {
-                              startInstance();
-                            }
-                          },
+                        // On the Apple backend the promise this button
+                        // makes while running — "open terminal" — is the
+                        // serial console; start (with the VM's display)
+                        // is only for bringing a stopped VM up.
+                        : openOrStart,
                   ),
                 ),
               ),
@@ -237,7 +325,7 @@ class _ListItemState extends State<ListItem> {
               maintainState: true,
               child: MergeSemantics(
                 child: Tooltip(
-                  message: 'stop-text'.i18n(),
+                  message: withShortcut('stop-text'.i18n(), AppKeys.stop),
                   child: MouseRegion(
                     cursor: SystemMouseCursors.click,
                     child: IconButton(
@@ -265,12 +353,15 @@ class _ListItemState extends State<ListItem> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
-                child: Tooltip(
-                  message: headerLabel(),
-                  child: Text(
-                    headerLabel(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                child: Listener(
+                  onPointerDown: _onNameDown,
+                  child: Tooltip(
+                    message: headerLabel(),
+                    child: Text(
+                      headerLabel(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
               ),
@@ -694,13 +785,13 @@ class Bar extends StatelessWidget {
               ),
               MergeSemantics(
                 child: Tooltip(
-                  message: 'copy-text'.i18n(),
+                  message: withShortcut('copy-text'.i18n(), AppKeys.duplicate),
                   child: MouseRegion(
                     cursor: SystemMouseCursors.click,
                     child: IconButton(
                       icon: const Icon(FluentIcons.copy, size: 16.0),
                       onPressed: () {
-                        copyDialog(widget.item);
+                        copyDialog(widget.item, hostContext: context);
                       },
                     ),
                   ),
@@ -708,34 +799,15 @@ class Bar extends StatelessWidget {
               ),
               MergeSemantics(
                 child: Tooltip(
-                  message: 'rename-text'.i18n(),
+                  message: withShortcut('rename-text'.i18n(), AppKeys.rename),
                   child: MouseRegion(
                     cursor: SystemMouseCursors.click,
                     child: IconButton(
                       // A pencil, not the abstract =|) mark nothing reads
                       // as renaming (audit LN-06).
                       icon: const Icon(FluentIcons.edit, size: 16.0),
-                      onPressed: () {
-                        dialog(
-                            item: widget.item,
-                            title:
-                                '${'rename-text'.i18n()} \'${distroLabel(widget.item)}\'',
-                            body: 'renameinfo-text'.i18n(),
-                            submitText: 'rename-text'.i18n(),
-                            submitStyle: const ButtonStyle(),
-                            onSubmit: (inputText) {
-                              Notify.message(
-                                  'renaminginstance-text'.i18n(
-                                      [distroLabel(widget.item), inputText]),
-                                  loading: true);
-                              prefs.setString(
-                                  'DistroName_${widget.item}', inputText);
-                              Notify.message(
-                                  'renamedinstance-text'.i18n(
-                                      [distroLabel(widget.item), inputText]),
-                                  severity: InfoBarSeverity.success);
-                            });
-                      },
+                      onPressed: () => renameInstanceDialog(widget.item,
+                          hostContext: context),
                     ),
                   ),
                 ),
@@ -928,46 +1000,14 @@ class Bar extends StatelessWidget {
               ),
               MergeSemantics(
                 child: Tooltip(
-                  message: 'delete-text'.i18n(),
+                  message: withShortcut('delete-text'.i18n(), AppKeys.delete),
                   child: MouseRegion(
                     cursor: SystemMouseCursors.click,
                     child: IconButton(
                         icon: Icon(FluentIcons.delete,
                             size: 16.0, color: destructiveColor(context)),
-                        onPressed: () {
-                          dialog(
-                              item: widget.item,
-                              title: 'deleteinstancequestion-text'
-                                  .i18n([distroLabel(widget.item)]),
-                              body: 'deleteinstancebody-text'.i18n(),
-                              submitText: 'delete-text'.i18n(),
-                              submitInput: false,
-                              submitStyle: ButtonStyle(
-                                backgroundColor: ButtonState.all(Colors.red),
-                                foregroundColor: ButtonState.all(Colors.white),
-                              ),
-                              onSubmit: (inputText) async {
-                                try {
-                                  Notify.message(
-                                      'deletinginstance-text'
-                                          .i18n([distroLabel(widget.item)]),
-                                      loading: true);
-                                  await api.remove(widget.item);
-                                  Notify.message(
-                                      'deletedinstance-text'
-                                          .i18n([widget.item]),
-                                      severity: InfoBarSeverity.success);
-                                } catch (e) {
-                                  final failure = WslFailure.from(e);
-                                  Notify.message(
-                                      '${'deletefailed-text'.i18n([
-                                        distroLabel(widget.item)
-                                      ])} ${failure.shortReason}'.trim(),
-                                      severity: InfoBarSeverity.error);
-                                  diagnoseWithAi(failure.details);
-                                }
-                              });
-                        }),
+                        onPressed: () => deleteInstanceDialog(api, widget.item,
+                            hostContext: context)),
                   ),
                 ),
               ),
@@ -977,4 +1017,56 @@ class Bar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Rename [item]: the row's pencil and F2.
+void renameInstanceDialog(String item, {BuildContext? hostContext}) {
+  dialog(
+      item: item,
+      hostContext: hostContext,
+      title: '${'rename-text'.i18n()} \'${distroLabel(item)}\'',
+      body: 'renameinfo-text'.i18n(),
+      submitText: 'rename-text'.i18n(),
+      submitStyle: const ButtonStyle(),
+      onSubmit: (inputText) {
+        Notify.message(
+            'renaminginstance-text'.i18n([distroLabel(item), inputText]),
+            loading: true);
+        prefs.setString('DistroName_$item', inputText);
+        Notify.message(
+            'renamedinstance-text'.i18n([distroLabel(item), inputText]),
+            severity: InfoBarSeverity.success);
+      });
+}
+
+/// Delete [item] once the user confirms: the row's bin and the Delete key.
+void deleteInstanceDialog(VmBackend api, String item,
+    {BuildContext? hostContext}) {
+  dialog(
+      item: item,
+      hostContext: hostContext,
+      title: 'deleteinstancequestion-text'.i18n([distroLabel(item)]),
+      body: 'deleteinstancebody-text'.i18n(),
+      submitText: 'delete-text'.i18n(),
+      submitInput: false,
+      submitStyle: ButtonStyle(
+        backgroundColor: ButtonState.all(Colors.red),
+        foregroundColor: ButtonState.all(Colors.white),
+      ),
+      onSubmit: (inputText) async {
+        try {
+          Notify.message('deletinginstance-text'.i18n([distroLabel(item)]),
+              loading: true);
+          await api.remove(item);
+          Notify.message('deletedinstance-text'.i18n([item]),
+              severity: InfoBarSeverity.success);
+        } catch (e) {
+          final failure = WslFailure.from(e);
+          Notify.message(
+              '${'deletefailed-text'.i18n([distroLabel(item)])} ${failure.shortReason}'
+                  .trim(),
+              severity: InfoBarSeverity.error);
+          diagnoseWithAi(failure.details);
+        }
+      });
 }

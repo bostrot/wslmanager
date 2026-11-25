@@ -9,6 +9,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:wsl2distromanager/components/helpers.dart';
 import 'package:wsl2distromanager/components/notify.dart';
+import 'package:wsl2distromanager/nav/keyboard_shortcuts.dart';
 import 'package:wsl2distromanager/oss_licenses.dart';
 import 'base_dialog.dart';
 
@@ -178,6 +179,13 @@ class _AppAboutDialogState extends State<AppAboutDialog> {
         description: 'about-documentation-desc'.i18n(),
         external: true,
         onPressed: () => _open('docs_clicked', _wikiUrl),
+      ),
+      AboutTile(
+        key: const ValueKey('test-about-shortcuts'),
+        icon: FluentIcons.keyboard_classic,
+        title: 'keyboardshortcuts-text'.i18n(),
+        description: 'about-shortcuts-desc'.i18n(),
+        onPressed: () => showKeyboardShortcutsDialog(context),
       ),
       AboutTile(
         icon: FluentIcons.heart,
