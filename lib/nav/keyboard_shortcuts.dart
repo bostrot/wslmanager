@@ -362,12 +362,18 @@ Widget _section(BuildContext context, String title, List<_ShortcutRow> rows) {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: Text(row.description)),
+              Expanded(flex: 3, child: Text(row.description)),
               const SizedBox(width: 12),
-              Wrap(
-                spacing: 4,
-                runSpacing: 4,
-                children: [for (final key in row.keys) _KeyCap(key)],
+              // Bounded: "Strg+Umschalt+T" and its translations must wrap
+              // rather than push the row past the dialog.
+              Expanded(
+                flex: 2,
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: [for (final key in row.keys) _KeyCap(key)],
+                ),
               ),
             ],
           ),
