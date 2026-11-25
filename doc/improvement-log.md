@@ -7,6 +7,7 @@ One line per run of the daily improvement job: date · area · change · PR.
 - 2026-11-20 · User experience · Filter the Home instance list by name once it holds six or more instances · https://github.com/bostrot/wslmanager/pull/323
 - 2026-11-23 · Localization · Say "Work stopped." and "Saving Work as a template..." as whole translated sentences under the instance's own label · https://github.com/bostrot/wslmanager/pull/326
 - 2026-11-24 · Bug fix · Point the TurnKey Linux source at TurnKey's own mirror (the RWTH copy 404s) and read single-quoted and absolute links · https://github.com/bostrot/wslmanager/pull/327
+- 2026-11-25 · User experience · Ctrl+F (Cmd+F on macOS) jumps to the Home instance filter, F5 reloads the list · https://github.com/bostrot/wslmanager/pull/328
 
 ## Lessons from reviews
 
@@ -19,11 +20,6 @@ One line per run of the daily improvement job: date · area · change · PR.
   ai-workspace distro after I delete it") shipped in `2c2e2d0`
   (`AiWorkspaceService.autoProvisionPrefKey`), but the issue is still open.
   Needs a maintainer reply pointing at the release that carries it.
-- **Ctrl+F / F5 on Home.** The app has no keyboard shortcuts outside the AI
-  chat dock. Ctrl+F could focus the new instance filter (`list.dart`,
-  `_filterController`), F5 could bump `reloadTick`. Open question: where to
-  put the `Shortcuts` so they work without the list holding focus, and
-  without fighting the AI chat input.
 - **Stale translation keys.** `de.json`, `pt.json`, `zh_CN.json`, `zh_TW.json`
   each carry one or two keys `en.json` no longer has. Harmless, but
   `check_translations.dart` could flag extras as well as gaps.
@@ -47,3 +43,12 @@ One line per run of the daily improvement job: date · area · change · PR.
 - **Dead-source feedback.** A repo that answers 404 only shows Dio's raw
   exception text through `Notify.message` with info severity; it deserves a
   translated "this listing could not be read" with `severity: error`.
+- **Show the Home shortcuts somewhere.** Ctrl+F and F5 on Home are not
+  discoverable. A keyboard-shortcuts list (Settings → About, or a `?`
+  flyout) would cover them and the AI dock's arrow-key nudge. Needs one new
+  string per shortcut in all `lib/i18n/*.json`.
+- **`_indicatesMissingDistro` in `ai_workspace/service.dart`** treats any
+  stderr containing `not found` or the distro's own name as "distro
+  missing", and that result is persisted as a confirmed `notInstalled`. An
+  error message that merely names `ai-workspace` would clear a good cached
+  status. Matching only `WSL_E_DISTRO_NOT_FOUND` would follow AGENTS.md.

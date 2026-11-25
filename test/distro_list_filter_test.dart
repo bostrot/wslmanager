@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,9 +15,11 @@ import 'vm_backend_test.dart' show FakeBackend;
 class _ListBackend extends FakeBackend {
   _ListBackend(this.names);
   List<String> names;
+  int listCalls = 0;
 
   @override
   Future<Instances> list(bool showDocker) async {
+    listCalls++;
     lastDistroList = Instances(List.of(names), []);
     return lastDistroList;
   }
@@ -186,5 +190,131 @@ void main() {
     expect(filter, findsOneWidget);
     expect(find.text('distro-1'), findsOneWidget);
     await drainReloadLoop(tester);
+  });
+
+  group('keyboard', () {
+    final command = Platform.isMacOS
+        ? LogicalKeyboardKey.metaLeft
+        : LogicalKeyboardKey.controlLeft;
+
+    Future<void> pressFind(WidgetTester tester) async {
+      await tester.sendKeyDownEvent(command);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+      await tester.sendKeyUpEvent(command);
+      await tester.pump();
+    }
+
+    bool filterFocused(WidgetTester tester) {
+      final focused = FocusManager.instance.primaryFocus?.context;
+      return focused != null &&
+          find
+              .descendant(
+                  of: filter, matching: find.byWidget(focused.widget))
+              .evaluate()
+              .isNotEmpty;
+    }
+
+    testWidgets('Ctrl+F opens and focuses the filter on a short list',
+        (tester) async {
+      await pumpList(tester, _ListBackend(['alpine', 'debian']));
+      expect(filter, findsNothing);
+
+      await pressFind(tester);
+      expect(filter, findsOneWidget);
+      expect(filterFocused(tester), isTrue);
+
+      await tester.enterText(filter, 'deb');
+      await tester.pump();
+      expect(find.text('alpine'), findsNothing);
+      expect(find.text('debian'), findsOneWidget);
+
+      // Escape clears the query, and a box nobody asked to keep goes away.
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(filter, findsNothing);
+      expect(find.text('alpine'), findsOneWidget);
+      await drainReloadLoop(tester);
+    });
+
+    testWidgets('Ctrl+F selects the query already typed', (tester) async {
+      await pumpList(
+          tester, _ListBackend([for (var i = 0; i < 6; i++) 'distro-$i']));
+      await tester.enterText(filter, 'o-3');
+      await tester.pump();
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pump();
+
+      await pressFind(tester);
+      expect(filterFocused(tester), isTrue);
+      final box = tester.widget<EditableText>(
+          find.descendant(of: filter, matching: find.byType(EditableText)));
+      expect(box.controller.selection,
+          const TextSelection(baseOffset: 0, extentOffset: 3));
+      await drainReloadLoop(tester);
+    });
+
+    testWidgets('F5 reloads the list without waiting for the poll',
+        (tester) async {
+      final backend = _ListBackend(['alpine']);
+      await pumpList(tester, backend);
+      final before = backend.listCalls;
+      backend.names = ['alpine', 'fresh'];
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.f5);
+      await tester.pump();
+      await tester.pump();
+      expect(backend.listCalls, greaterThan(before));
+      expect(find.text('fresh'), findsOneWidget);
+      await drainReloadLoop(tester);
+    });
+
+    testWidgets('the keys leave an open dialog alone', (tester) async {
+      final backend = _ListBackend(['alpine', 'debian']);
+      await pumpList(tester, backend);
+      final context = tester.element(find.byType(DistroList));
+      showDialog<void>(
+        context: context,
+        builder: (_) => const ContentDialog(
+          content: TextBox(key: ValueKey('dialog-box'), autofocus: true),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      final before = backend.listCalls;
+
+      await pressFind(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.f5);
+      await tester.pump();
+      expect(filter, findsNothing);
+      expect(backend.listCalls, before);
+
+      Navigator.of(context).pop();
+      await tester.pump(const Duration(milliseconds: 300));
+      await drainReloadLoop(tester);
+    });
+
+    testWidgets('another text field keeps its own Ctrl+F', (tester) async {
+      final backend = _ListBackend(['alpine', 'debian']);
+      vmBackendBuilder = () => backend;
+      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(FluentApp(
+        home: ScaffoldPage(
+          content: Column(children: [
+            const TextBox(key: ValueKey('other-box')),
+            DistroList(api: backend),
+          ]),
+        ),
+      ));
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('other-box')));
+      await tester.pump();
+
+      await pressFind(tester);
+      expect(filter, findsNothing);
+      await drainReloadLoop(tester);
+    });
   });
 }
