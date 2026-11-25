@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:localization/localization.dart';
 import 'package:wsl2distromanager/api/vm/vm_backend.dart';
@@ -66,22 +67,105 @@ class DistroListState extends State<DistroList> {
   void initState() {
     init();
     super.initState();
+    HardwareKeyboard.instance.addHandler(_onKey);
+    _filterFocus.addListener(_onFilterFocusChange);
   }
 
   // Lives here, not in the builder: the 5s poll rebuilds the rows, and the
   // typed filter has to survive every one of those rebuilds.
   final TextEditingController _filterController = TextEditingController();
+  final FocusNode _filterFocus = FocusNode(debugLabel: 'instance-filter');
   String _filter = '';
+
+  /// Ctrl+F asked for the box on a list too short to show it on its own.
+  /// It goes away again once the box is left empty.
+  bool _filterRequested = false;
 
   void _setFilter(String value) {
     if (_filterController.text != value) _filterController.text = value;
     setState(() => _filter = value);
   }
 
+  void _onFilterFocusChange() {
+    if (!_filterFocus.hasFocus && _filterRequested && _filter.isEmpty) {
+      setState(() => _filterRequested = false);
+    }
+  }
+
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
+    _filterFocus.dispose();
     _filterController.dispose();
     super.dispose();
+  }
+
+  /// Ctrl+F (Cmd+F on a Mac) jumps to the filter, F5 reloads the list now
+  /// instead of at the next poll.
+  ///
+  /// A global handler rather than [CallbackShortcuts]: those only fire while
+  /// focus is inside the list, and after a click on the nav pane or on blank
+  /// space nothing in it holds focus. The checks below keep the keys from
+  /// reaching through whatever is in front of the list instead.
+  bool _onKey(KeyEvent event) {
+    if (event is! KeyDownEvent || !mounted || !_ownsKeyboard()) return false;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.f5 && !_modifierHeld()) {
+      setState(() => reloadTick++);
+      return true;
+    }
+    final keyboard = HardwareKeyboard.instance;
+    final command =
+        Platform.isMacOS ? keyboard.isMetaPressed : keyboard.isControlPressed;
+    if (key == LogicalKeyboardKey.keyF &&
+        command &&
+        !keyboard.isShiftPressed &&
+        !keyboard.isAltPressed) {
+      // Another text field keeps its own Ctrl+F, and there is nothing to
+      // filter before the first list has arrived.
+      final shown = widget.api.lastDistroList.all;
+      if (_typingElsewhere() ||
+          shown.isEmpty ||
+          shown.first == 'wslNotInstalled') {
+        return false;
+      }
+      setState(() => _filterRequested = true);
+      // The box may only exist after this rebuild.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _filterFocus.requestFocus();
+        _filterController.selection = TextSelection(
+            baseOffset: 0, extentOffset: _filterController.text.length);
+      });
+      return true;
+    }
+    return false;
+  }
+
+  bool _modifierHeld() {
+    final keyboard = HardwareKeyboard.instance;
+    return keyboard.isControlPressed ||
+        keyboard.isMetaPressed ||
+        keyboard.isAltPressed ||
+        keyboard.isShiftPressed;
+  }
+
+  /// False while a page pushed over Home (the list stays mounted under it)
+  /// or a dialog has the keyboard.
+  bool _ownsKeyboard() {
+    if (!(ModalRoute.of(context)?.isCurrent ?? true)) return false;
+    final focused = FocusManager.instance.primaryFocus?.context;
+    if (focused == null) return true;
+    return ModalRoute.of(focused) is! PopupRoute;
+  }
+
+  bool _typingElsewhere() {
+    final focused = FocusManager.instance.primaryFocus;
+    if (focused == null || focused == _filterFocus) return false;
+    final focusedContext = focused.context;
+    if (focusedContext == null) return false;
+    return focusedContext.widget is EditableText ||
+        focusedContext.findAncestorWidgetOfExactType<EditableText>() != null;
   }
 
   Widget _filterBox() {
@@ -90,12 +174,15 @@ class DistroListState extends State<DistroList> {
       // Escape clears, like every other search box on Windows.
       child: CallbackShortcuts(
         bindings: {
-          const SingleActivator(LogicalKeyboardKey.escape): () =>
-              _setFilter(''),
+          const SingleActivator(LogicalKeyboardKey.escape): () {
+            _setFilter('');
+            if (_filterRequested) _filterFocus.unfocus();
+          },
         },
         child: TextBox(
           key: const ValueKey('test-instance-filter'),
           controller: _filterController,
+          focusNode: _filterFocus,
           placeholder: 'filterinstances-text'.i18n(),
           prefix: const Padding(
             padding: EdgeInsets.only(left: 8.0),
@@ -251,8 +338,9 @@ class DistroListState extends State<DistroList> {
           }
           // Kept while a query is typed, so deleting instances down to
           // below the threshold cannot strand a filter nobody can clear.
-          final showFilter =
-              list.length >= kInstanceFilterThreshold || _filter.isNotEmpty;
+          final showFilter = list.length >= kInstanceFilterThreshold ||
+              _filter.isNotEmpty ||
+              _filterRequested;
           final visible = showFilter ? filterInstances(list, _filter) : list;
           for (String item in visible) {
             newList.add(ListItem(
