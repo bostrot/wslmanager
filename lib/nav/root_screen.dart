@@ -21,6 +21,7 @@ import 'package:wsl2distromanager/components/unsaved_changes.dart';
 import 'package:wsl2distromanager/dialogs/bug_dialog.dart';
 import 'package:wsl2distromanager/main.dart';
 import 'package:wsl2distromanager/nav/init.dart';
+import 'package:wsl2distromanager/nav/keyboard_shortcuts.dart';
 import 'package:wsl2distromanager/nav/panelist.dart';
 import 'package:wsl2distromanager/nav/router.dart';
 import 'package:wsl2distromanager/nav/shell_focus.dart';
@@ -360,9 +361,16 @@ class RootPageState extends State<RootPage> with WindowListener {
 
     // The group has to be above the scope: the sort walks up from the scope
     // node to find the policy that owns it.
-    return FocusTraversalGroup(
-      policy: shellTraversalPolicy,
-      child: FocusScope(node: shellFocusScope, child: navigationView),
+    return AppShortcuts(
+      destinations: () => [...originalItems, ...footerItems]
+          .whereType<PaneItem>()
+          .where((item) => item is! PaneItemAction)
+          .toList(),
+      currentPath: () => widget.state.uri.path,
+      child: FocusTraversalGroup(
+        policy: shellTraversalPolicy,
+        child: FocusScope(node: shellFocusScope, child: navigationView),
+      ),
     );
   }
 

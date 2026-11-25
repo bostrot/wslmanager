@@ -126,12 +126,13 @@ void main() {
       'donate-text': 'about-donate-desc',
       'dependencies-text': 'about-dependencies-desc',
       'license-text': 'about-license-desc',
+      'keyboardshortcuts-text': 'about-shortcuts-desc',
     }.entries) {
       expect(find.text(pair.key), findsOneWidget, reason: pair.key);
       expect(find.text(pair.value), findsOneWidget, reason: pair.value);
     }
-    // Six links plus the privacy row, all keyboard-reachable tiles (IA-04).
-    expect(find.byType(AboutTile), findsNWidgets(7));
+    // Seven links plus the privacy row, all keyboard-reachable tiles (IA-04).
+    expect(find.byType(AboutTile), findsNWidgets(8));
   });
 
   testWidgets('the privacy tile reads the stored choice', (tester) async {

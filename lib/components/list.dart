@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:localization/localization.dart';
 import 'package:wsl2distromanager/api/vm/vm_backend.dart';
@@ -12,6 +11,7 @@ import 'package:wsl2distromanager/components/error_view.dart';
 import 'package:wsl2distromanager/components/named_button.dart';
 import 'package:wsl2distromanager/components/notify.dart';
 import 'package:wsl2distromanager/dialogs/dialogs.dart';
+import 'package:wsl2distromanager/nav/keyboard_shortcuts.dart';
 import 'package:wsl2distromanager/nav/router.dart';
 import 'list_item.dart';
 import 'helpers.dart';
@@ -92,16 +92,151 @@ class DistroListState extends State<DistroList> {
     }
   }
 
+  /// The row the keys act on. Kept by name, so the 5s poll and the filter
+  /// leave it on the same instance.
+  String? _selected;
+
+  /// The names on screen, in order, as of the last build.
+  List<String> _visible = const [];
+
+  /// Each mounted row's state, so a key runs the row's own action and the
+  /// row's buttons show it busy.
+  final Map<String, ListItemState> _rows = {};
+
+  /// Holds the keyboard once a row was clicked or picked with the arrows.
+  /// Out of the Tab cycle: the rows and their buttons already are in it.
+  final FocusNode _listFocus =
+      FocusNode(debugLabel: 'instance-list', skipTraversal: true);
+  final ScrollController _scroll = ScrollController();
+
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onKey);
     _filterFocus.dispose();
     _filterController.dispose();
+    _listFocus.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
+  void _select(String item) {
+    if (_selected != item) setState(() => _selected = item);
+    _listFocus.requestFocus();
+  }
+
+  /// Arrow keys, Home and End. [jump] scrolls to that end first: a row far
+  /// off screen has not been built yet, so there is nothing to bring into
+  /// view until the list is there.
+  bool _moveSelection(int delta, {bool? jump}) {
+    final visible = _visible;
+    if (visible.isEmpty) return false;
+    final int next;
+    if (jump != null) {
+      next = jump ? visible.length - 1 : 0;
+      if (_scroll.hasClients) {
+        _scroll.jumpTo(jump ? _scroll.position.maxScrollExtent : 0);
+      }
+    } else {
+      final current = _selected == null ? -1 : visible.indexOf(_selected!);
+      next = current == -1
+          ? (delta > 0 ? 0 : visible.length - 1)
+          : (current + delta).clamp(0, visible.length - 1);
+    }
+    final item = visible[next];
+    _select(item);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final row = _rows[item];
+      if (!mounted || row == null || !row.mounted) return;
+      Scrollable.ensureVisible(row.context,
+          alignmentPolicy: delta < 0 || jump == false
+              ? ScrollPositionAlignmentPolicy.keepVisibleAtStart
+              : ScrollPositionAlignmentPolicy.keepVisibleAtEnd);
+    });
+    return true;
+  }
+
+  /// Nothing in particular has the keyboard, or something on this list
+  /// does — a click on the pane leaves the arrows to the pane.
+  bool _focusInList() {
+    final focused = FocusManager.instance.primaryFocus;
+    if (focused == null || focused is FocusScopeNode) return true;
+    if (focused == _listFocus || focused == _filterFocus) return true;
+    return focused.context?.findAncestorStateOfType<DistroListState>() ==
+        this;
+  }
+
+  /// Enter on a focused button presses that button; only the list itself
+  /// (or nothing at all) hands it to the selected row.
+  bool _listHoldsKeyboard() {
+    final focused = FocusManager.instance.primaryFocus;
+    return focused == null || focused is FocusScopeNode || focused == _listFocus;
+  }
+
+  /// Keys that act on the selection: moving it, and the row's own actions.
+  bool _onInstanceKey(LogicalKeyboardKey key) {
+    final inFilter = FocusManager.instance.primaryFocus == _filterFocus;
+    if (key == LogicalKeyboardKey.escape) {
+      // In the box, the box's own Escape clears it.
+      if (!noModifierHeld() || textFieldHasFocus()) return false;
+      if (_filter.isNotEmpty) {
+        _setFilter('');
+        return true;
+      }
+      if (_selected != null) {
+        setState(() => _selected = null);
+        return true;
+      }
+      return false;
+    }
+    if (textFieldHasFocus(except: _filterFocus) || !_focusInList()) {
+      return false;
+    }
+    if (noModifierHeld()) {
+      // Down leaves the filter for the first match, as in any search list.
+      if (key == LogicalKeyboardKey.arrowDown) return _moveSelection(1);
+      if (inFilter) return false;
+      if (key == LogicalKeyboardKey.arrowUp) return _moveSelection(-1);
+      if (key == LogicalKeyboardKey.home) return _moveSelection(-1, jump: false);
+      if (key == LogicalKeyboardKey.end) return _moveSelection(1, jump: true);
+    }
+    if (inFilter) return false;
+    final row = _selected == null ? null : _rows[_selected];
+    if (row == null || !row.mounted) return false;
+    if ((key == LogicalKeyboardKey.enter ||
+            key == LogicalKeyboardKey.numpadEnter) &&
+        noModifierHeld()) {
+      if (!_listHoldsKeyboard()) return false;
+      row.openOrStart();
+      return true;
+    }
+    if (key == LogicalKeyboardKey.keyT && onlyCommandHeld(shift: true)) {
+      row.openTerminalShortcut();
+      return true;
+    }
+    if (key == LogicalKeyboardKey.keyS && onlyCommandHeld(shift: true)) {
+      row.stopShortcut();
+      return true;
+    }
+    if (key == LogicalKeyboardKey.f2 && noModifierHeld()) {
+      row.rename();
+      return true;
+    }
+    if (key == LogicalKeyboardKey.keyD && onlyCommandHeld()) {
+      row.duplicate();
+      return true;
+    }
+    final delete = macShortcuts
+        ? key == LogicalKeyboardKey.backspace && onlyCommandHeld()
+        : key == LogicalKeyboardKey.delete && noModifierHeld();
+    if (delete) {
+      row.delete();
+      return true;
+    }
+    return false;
+  }
+
   /// Ctrl+F (Cmd+F on a Mac) jumps to the filter, F5 reloads the list now
-  /// instead of at the next poll.
+  /// instead of at the next poll; the rest is [_onInstanceKey].
   ///
   /// A global handler rather than [CallbackShortcuts]: those only fire while
   /// focus is inside the list, and after a click on the nav pane or on blank
@@ -110,21 +245,15 @@ class DistroListState extends State<DistroList> {
   bool _onKey(KeyEvent event) {
     if (event is! KeyDownEvent || !mounted || !_ownsKeyboard()) return false;
     final key = event.logicalKey;
-    if (key == LogicalKeyboardKey.f5 && !_modifierHeld()) {
+    if (key == LogicalKeyboardKey.f5 && noModifierHeld()) {
       setState(() => reloadTick++);
       return true;
     }
-    final keyboard = HardwareKeyboard.instance;
-    final command =
-        Platform.isMacOS ? keyboard.isMetaPressed : keyboard.isControlPressed;
-    if (key == LogicalKeyboardKey.keyF &&
-        command &&
-        !keyboard.isShiftPressed &&
-        !keyboard.isAltPressed) {
+    if (key == LogicalKeyboardKey.keyF && onlyCommandHeld()) {
       // Another text field keeps its own Ctrl+F, and there is nothing to
       // filter before the first list has arrived.
       final shown = widget.api.lastDistroList.all;
-      if (_typingElsewhere() ||
+      if (textFieldHasFocus(except: _filterFocus) ||
           shown.isEmpty ||
           shown.first == 'wslNotInstalled') {
         return false;
@@ -139,15 +268,7 @@ class DistroListState extends State<DistroList> {
       });
       return true;
     }
-    return false;
-  }
-
-  bool _modifierHeld() {
-    final keyboard = HardwareKeyboard.instance;
-    return keyboard.isControlPressed ||
-        keyboard.isMetaPressed ||
-        keyboard.isAltPressed ||
-        keyboard.isShiftPressed;
+    return _onInstanceKey(key);
   }
 
   /// False while a page pushed over Home (the list stays mounted under it)
@@ -157,15 +278,6 @@ class DistroListState extends State<DistroList> {
     final focused = FocusManager.instance.primaryFocus?.context;
     if (focused == null) return true;
     return ModalRoute.of(focused) is! PopupRoute;
-  }
-
-  bool _typingElsewhere() {
-    final focused = FocusManager.instance.primaryFocus;
-    if (focused == null || focused == _filterFocus) return false;
-    final focusedContext = focused.context;
-    if (focusedContext == null) return false;
-    return focusedContext.widget is EditableText ||
-        focusedContext.findAncestorWidgetOfExactType<EditableText>() != null;
   }
 
   Widget _filterBox() {
@@ -342,6 +454,9 @@ class DistroListState extends State<DistroList> {
               _filter.isNotEmpty ||
               _filterRequested;
           final visible = showFilter ? filterInstances(list, _filter) : list;
+          _visible = visible;
+          // A selection filtered away or deleted is no selection.
+          if (!visible.contains(_selected)) _selected = null;
           for (String item in visible) {
             newList.add(ListItem(
               // A row holds its instance's busy and sync state; filtering
@@ -351,10 +466,17 @@ class DistroListState extends State<DistroList> {
               item: item,
               running: running,
               trailing: widget.api.instanceMetaLabel(item),
+              selected: item == _selected,
+              onSelect: () => _select(item),
+              rows: _rows,
             ));
           }
-          final rows = ListView.custom(
-            childrenDelegate: SliverChildListDelegate(newList),
+          final rows = Focus(
+            focusNode: _listFocus,
+            child: ListView.custom(
+              controller: _scroll,
+              childrenDelegate: SliverChildListDelegate(newList),
+            ),
           );
           if (!showFilter) return Expanded(child: rows);
           return Expanded(
