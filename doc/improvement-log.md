@@ -7,7 +7,7 @@ One line per run of the daily improvement job: date · area · change · PR.
 - 2026-11-20 · User experience · Filter the Home instance list by name once it holds six or more instances · https://github.com/bostrot/wslmanager/pull/323
 - 2026-11-23 · Localization · Say "Work stopped." and "Saving Work as a template..." as whole translated sentences under the instance's own label · https://github.com/bostrot/wslmanager/pull/326
 - 2026-11-24 · Bug fix · Point the TurnKey Linux source at TurnKey's own mirror (the RWTH copy 404s) and read single-quoted and absolute links · https://github.com/bostrot/wslmanager/pull/327
-- 2026-11-25 · User experience · Ctrl+F (Cmd+F on macOS) jumps to the Home instance filter, F5 reloads the list · PR_LINK
+- 2026-11-25 · User experience · Ctrl+F (Cmd+F on macOS) jumps to the Home instance filter, F5 reloads the list · https://github.com/bostrot/wslmanager/pull/328
 
 ## Lessons from reviews
 
