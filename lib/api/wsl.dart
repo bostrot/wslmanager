@@ -14,6 +14,7 @@ import 'package:wsl2distromanager/api/cancellation.dart';
 import 'package:wsl2distromanager/api/remote_command.dart';
 import 'package:wsl2distromanager/api/remote_target.dart';
 import 'package:wsl2distromanager/api/rootfs_architecture.dart';
+import 'package:wsl2distromanager/api/rootfs_repo.dart';
 import 'package:wsl2distromanager/api/safe_paths.dart';
 import 'package:wsl2distromanager/api/execution/broker.dart';
 import 'package:wsl2distromanager/api/execution/models.dart';
@@ -2275,25 +2276,9 @@ try {
     // Get list of distros from custom repo link and try to format
     final scraped = <String, String>{};
     try {
-      await Dio().get(repo).then((value) => {
-            value.data.split('\n').forEach((line) {
-              if (line.contains('tar.gz') && line.contains('href=')) {
-                var parts = line.split(RegExp(r'href=["' ']'));
-                if (parts.length < 2) return;
-                String filename = parts[1].split(RegExp(r'["' ']'))[0];
-
-                if (!filename.endsWith('.tar.gz')) return;
-
-                String name = filename
-                    .replaceAll('.tar.gz', '')
-                    .replaceAll('1_amd64', '')
-                    .replaceAll(RegExp(r'-|_'), ' ')
-                    .replaceAllMapped(RegExp(r' .|^.'),
-                        (Match m) => m[0].toString().toUpperCase());
-                scraped.addAll({name: repo + filename});
-              }
-            })
-          });
+      final response = await Dio().get<String>(repo,
+          options: Options(responseType: ResponseType.plain));
+      scraped.addAll(parseRootfsListing(response.data ?? '', repo));
     } catch (e) {
       onError(e.toString());
     }

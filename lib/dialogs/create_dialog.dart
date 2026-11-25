@@ -11,9 +11,9 @@ import 'package:wsl2distromanager/api/wsl.dart';
 import 'package:wsl2distromanager/api/wsl_errors.dart';
 import 'package:wsl2distromanager/api/docker_local_image.dart';
 import 'package:wsl2distromanager/api/app.dart';
+import 'package:wsl2distromanager/api/rootfs_repo.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:wsl2distromanager/components/constants.dart';
 import 'package:wsl2distromanager/components/helpers.dart';
 import 'package:wsl2distromanager/components/named_button.dart';
 import 'package:wsl2distromanager/components/notify.dart';
@@ -637,7 +637,7 @@ class _CreateWidgetState extends State<CreateWidget> {
     } else if (sourceType == CreateSourceType.turnkey) {
       var repo = await App().getDistroLinks();
       var all = await widget.api.getDownloadable(
-          (prefs.getString('RepoLink') ?? defaultRepoLink),
+          rootfsRepoLink(prefs.getString('RepoLink')),
           (e) => Notify.message(e));
       return all.where((x) => !repo.containsKey(x)).toList();
     } else if (sourceType == CreateSourceType.dockerLocalImage) {
