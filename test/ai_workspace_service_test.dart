@@ -1967,9 +1967,10 @@ void main() {
         testShell.stdoutData = 'ai-workspace';
         await service.init();
 
-        // Status check fails with stderr about distro not found
+        // What wsl.exe answers for a distro that is not registered.
         testShell.exitCode = 1;
-        testShell.stderrData = 'distribution ai-workspace could not be found';
+        testShell.stderrData = 'There is no distribution with the supplied '
+            'name.\r\nError code: Wsl/Service/WSL_E_DISTRO_NOT_FOUND';
         await service.refreshStatus(AiWorkspaceTool.openWebUi);
 
         expect(
@@ -1977,6 +1978,97 @@ void main() {
           ToolStatus.notInstalled,
         );
       });
+
+      // wsl.exe localizes the sentence but never the code.
+      test('reads a localized missing-distro error by its code', () async {
+        testShell.stdoutData = 'ai-workspace';
+        await service.init();
+        testShell.stdoutData = 'running';
+        await service.refreshStatus(AiWorkspaceTool.openWebUi);
+
+        testShell.exitCode = 1;
+        testShell.stderrData = 'Es ist keine Verteilung mit dem angegebenen '
+            'Namen vorhanden.\r\nFehlercode: '
+            'Wsl/Service/WSL_E_DISTRO_NOT_FOUND';
+        await service.refreshStatus(AiWorkspaceTool.openWebUi);
+
+        expect(
+          service.getState(AiWorkspaceTool.openWebUi)?.status,
+          ToolStatus.notInstalled,
+        );
+        final restarted = AiWorkspaceService(broker: broker)..seedToolStates();
+        expect(restarted.getState(AiWorkspaceTool.openWebUi)?.status,
+            ToolStatus.notInstalled);
+      });
+
+      // wsl.exe sometimes reports on stdout and leaves stderr empty.
+      test('finds the missing-distro code on stdout too', () async {
+        testShell.stdoutData = 'ai-workspace';
+        await service.init();
+
+        testShell.exitCode = 1;
+        testShell.stdoutData =
+            'Error code: Wsl/Service/WSL_E_DISTRO_NOT_FOUND';
+        await service.refreshStatus(AiWorkspaceTool.hermesAgent);
+
+        expect(
+          service.getState(AiWorkspaceTool.hermesAgent)?.status,
+          ToolStatus.notInstalled,
+        );
+      });
+
+      // vmctl's answer when the macOS workspace VM is not in the store.
+      test("reads vmctl's missing-VM message as not installed", () async {
+        testShell.stdoutData = 'ai-workspace';
+        await service.init();
+
+        testShell.exitCode = 1;
+        testShell.stdoutData = '';
+        testShell.stderrData = 'vmctl: No VM named "ai-workspace".';
+        await service.refreshStatus(AiWorkspaceTool.openCode);
+
+        expect(
+          service.getState(AiWorkspaceTool.openCode)?.status,
+          ToolStatus.notInstalled,
+        );
+      });
+
+      // A failure inside the distro, or one that only mentions the distro by
+      // name, says nothing about whether the tool is installed. Reading it as
+      // "not installed" used to drop the install path and persist that guess
+      // over the last confirmed answer.
+      for (final stderr in const [
+        'bash: line 1: docker: command not found',
+        'curl: (6) Could not resolve host: localhost: Name or service not '
+            'found',
+        'Failed to start ai-workspace.\r\nError code: '
+            'Wsl/Service/CreateInstance/E_FAIL',
+        'The operation timed out because a response was not received from '
+            'the virtual machine or container.\r\nError code: '
+            'Wsl/Service/CreateInstance/HCS_E_CONNECTION_TIMEOUT',
+      ]) {
+        test('keeps the last confirmed status on: $stderr', () async {
+          testShell.stdoutData = 'ai-workspace';
+          await service.init();
+          testShell.stdoutData = 'exists';
+          await service.refreshStatus(AiWorkspaceTool.hermesAgent);
+
+          testShell.exitCode = 1;
+          testShell.stdoutData = '';
+          testShell.stderrData = stderr;
+          await service.refreshStatus(AiWorkspaceTool.hermesAgent);
+
+          final state = service.getState(AiWorkspaceTool.hermesAgent)!;
+          expect(state.status, ToolStatus.error);
+          expect(state.errorMessage, stderr);
+
+          final restarted = AiWorkspaceService(broker: broker)
+            ..seedToolStates();
+          final cached = restarted.getState(AiWorkspaceTool.hermesAgent)!;
+          expect(cached.status, ToolStatus.stopped);
+          expect(cached.installPath, 'cmd://hermes');
+        });
+      }
 
       // Regression coverage for `checked`: a UI decides whether to show a
       // checking spinner based on whether a tool was *attempted*, not
@@ -1988,7 +2080,8 @@ void main() {
         await service.init();
 
         testShell.exitCode = 1;
-        testShell.stderrData = 'distribution ai-workspace could not be found';
+        testShell.stderrData =
+            'Error code: Wsl/Service/WSL_E_DISTRO_NOT_FOUND';
         await service.refreshStatus(AiWorkspaceTool.openWebUi);
 
         expect(service.getState(AiWorkspaceTool.openWebUi)?.checked, true);

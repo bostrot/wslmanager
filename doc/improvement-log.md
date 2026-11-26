@@ -9,6 +9,7 @@ One line per run of the daily improvement job: date · area · change · PR.
 - 2026-11-24 · Bug fix · Point the TurnKey Linux source at TurnKey's own mirror (the RWTH copy 404s) and read single-quoted and absolute links · https://github.com/bostrot/wslmanager/pull/327
 - 2026-11-25 · User experience · Ctrl+F (Cmd+F on macOS) jumps to the Home instance filter, F5 reloads the list · https://github.com/bostrot/wslmanager/pull/328
 - 2026-11-25 · User experience · Default keyboard shortcuts: Ctrl+N, Ctrl+,, Ctrl+1…9, Ctrl+Tab, F1, a Ctrl+/ cheat sheet, and arrow-key selection with Enter, F2, Delete, Ctrl+D, Ctrl+Shift+T/S on Home · https://github.com/bostrot/wslmanager/pull/329
+- 2026-11-26 · Reliability · AI Workspace keeps a tool's last confirmed status unless WSL or vmctl explicitly says the workspace is gone, instead of reading any "not found" as "not installed" · https://github.com/bostrot/wslmanager/pull/330
 - 2026-11-27 · Reliability · Say why the TurnKey Linux list could not load (HTTP status, unreachable, or no images) as a translated error, and time out a hung mirror after 20 s · https://github.com/bostrot/wslmanager/pull/331
 
 ## Lessons from reviews
@@ -45,14 +46,12 @@ One line per run of the daily improvement job: date · area · change · PR.
 - **Ctrl+E / Ctrl+I.** Not bound: no instance has an export action of its
   own (Save as template is the closest), and importing lives inside Add
   instance, which Ctrl+N already opens. Bind them if either gets a button.
-- **`_indicatesMissingDistro` in `ai_workspace/service.dart`** treats any
-  stderr containing `not found` or the distro's own name as "distro
-  missing", and that result is persisted as a confirmed `notInstalled`. An
-  error message that merely names `ai-workspace` would clear a good cached
-  status. Matching only `WSL_E_DISTRO_NOT_FOUND` would follow AGENTS.md.
 - **Settings check for the TurnKey address.** The same three answers
   (`rootfsListingProblem`) could validate "Extra repo for Distros" as it is
   saved, instead of only when the TurnKey Linux source is next opened.
 - **Mirror URLs in notices are not links.** The new TurnKey errors name the
   address; a "Copy address" or "Open in browser" action on the InfoBar would
   save retyping it.
+- **Other English-substring matches on WSL output.** Grep for
+  `.contains('not found')`/`toLowerCase().contains(` on `stderr` across
+  `lib/api/` — AGENTS.md says to match `Wsl/…` codes via `wslErrorCode()`.

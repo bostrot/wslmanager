@@ -856,13 +856,19 @@ class AiWorkspaceService {
     _dockerReady = true;
   }
 
-  /// Matches on the untranslated WSL error code — wsl.exe localizes its
-  /// error text.
-  static bool _indicatesMissingDistro(String stderr) {
-    final lower = stderr.toLowerCase();
-    return lower.contains('wsl_e_distro_not_found') ||
-        lower.contains('not found') ||
-        lower.contains(kAiWorkspaceDistro.toLowerCase());
+  /// Whether a failed probe says the environment itself is gone, which is
+  /// a confirmed "not installed" for every tool in it.
+  ///
+  /// Only the two explicit answers count: WSL's untranslated error code
+  /// (wsl.exe localizes the sentence around it, and writes it to stdout or
+  /// stderr depending on the verb) and vmctl's own message for a VM that is
+  /// not in the store. Anything else, such as a `command not found` from
+  /// inside the distro or a start failure that names it, says nothing about
+  /// the tool and must not be persisted as if it did.
+  bool _indicatesMissingDistro(ExecutionResult result) {
+    final text = '${result.stderr}\n${result.stdout}';
+    return text.contains('WSL_E_DISTRO_NOT_FOUND') ||
+        text.contains('No VM named "${_runtime.target}"');
   }
 
   // Last *confirmed* status per tool, persisted so the UI can show a real
@@ -1559,7 +1565,7 @@ class AiWorkspaceService {
         }
         _toolStates[tool]?.errorMessage = null;
         _persistConfirmedState(tool);
-      } else if (_indicatesMissingDistro(result.stderr)) {
+      } else if (_indicatesMissingDistro(result)) {
         // An explicit WSL error code is still a confirmed answer.
         _toolStates[tool]?.status = ToolStatus.notInstalled;
         _toolStates[tool]?.errorMessage = null;
