@@ -1411,5 +1411,8 @@
   "key-esc-text": "Esc",
   "key-home-text": "Inicio",
   "key-end-text": "Fin",
-  "key-tab-text": "Tab"
+  "key-tab-text": "Tab",
+  "rootfslistinghttp-text": "No se pudo cargar la lista de TurnKey Linux: %s0 respondió con HTTP %s1. Revisa «%s2» en Configuración.",
+  "rootfslistingunreachable-text": "No se pudo acceder a la lista de TurnKey Linux en %s0. Revisa tu conexión y «%s1» en Configuración.",
+  "rootfslistingempty-text": "No se encontraron imágenes (.tar.gz) en %s0. Revisa «%s1» en Configuración."
 }

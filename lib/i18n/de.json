@@ -1412,5 +1412,8 @@
   "key-esc-text": "Esc",
   "key-home-text": "Pos1",
   "key-end-text": "Ende",
-  "key-tab-text": "Tab"
+  "key-tab-text": "Tab",
+  "rootfslistinghttp-text": "Die TurnKey-Linux-Liste konnte nicht geladen werden: %s0 antwortete mit HTTP %s1. Prüfe „%s2“ in den Einstellungen.",
+  "rootfslistingunreachable-text": "Die TurnKey-Linux-Liste unter %s0 ist nicht erreichbar. Prüfe deine Verbindung und „%s1“ in den Einstellungen.",
+  "rootfslistingempty-text": "Unter %s0 wurden keine Images (.tar.gz) gefunden. Prüfe „%s1“ in den Einstellungen."
 }

@@ -1411,5 +1411,8 @@
   "key-esc-text": "Esc",
   "key-home-text": "Home",
   "key-end-text": "End",
-  "key-tab-text": "Tab"
+  "key-tab-text": "Tab",
+  "rootfslistinghttp-text": "A TurnKey Linux lista nem tölthető be: %s0 HTTP %s1 választ adott. Ellenőrizd a(z) „%s2” beállítást.",
+  "rootfslistingunreachable-text": "A TurnKey Linux lista nem érhető el itt: %s0. Ellenőrizd a kapcsolatot és a(z) „%s1” beállítást.",
+  "rootfslistingempty-text": "Nem található kép (.tar.gz) itt: %s0. Ellenőrizd a(z) „%s1” beállítást."
 }

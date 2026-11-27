@@ -1411,5 +1411,8 @@
   "key-esc-text": "Esc",
   "key-home-text": "Home",
   "key-end-text": "End",
-  "key-tab-text": "Tab"
+  "key-tab-text": "Tab",
+  "rootfslistinghttp-text": "TurnKey Linux listesi yüklenemedi: %s0 HTTP %s1 ile yanıt verdi. Ayarlar'da \"%s2\" alanını kontrol edin.",
+  "rootfslistingunreachable-text": "%s0 adresindeki TurnKey Linux listesine ulaşılamıyor. Bağlantınızı ve Ayarlar'daki \"%s1\" alanını kontrol edin.",
+  "rootfslistingempty-text": "%s0 adresinde imaj (.tar.gz) bulunamadı. Ayarlar'da \"%s1\" alanını kontrol edin."
 }
