@@ -638,7 +638,7 @@ class _CreateWidgetState extends State<CreateWidget> {
       var repo = await App().getDistroLinks();
       var all = await widget.api.getDownloadable(
           rootfsRepoLink(prefs.getString('RepoLink')),
-          (e) => Notify.message(e));
+          (e) => Notify.message(e, severity: InfoBarSeverity.error));
       return all.where((x) => !repo.containsKey(x)).toList();
     } else if (sourceType == CreateSourceType.dockerLocalImage) {
       return DockerLocalImages().list();

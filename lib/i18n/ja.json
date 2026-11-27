@@ -1411,5 +1411,8 @@
   "key-esc-text": "Esc",
   "key-home-text": "Home",
   "key-end-text": "End",
-  "key-tab-text": "Tab"
+  "key-tab-text": "Tab",
+  "rootfslistinghttp-text": "TurnKey Linux の一覧を読み込めませんでした: %s0 が HTTP %s1 を返しました。設定の「%s2」を確認してください。",
+  "rootfslistingunreachable-text": "%s0 の TurnKey Linux の一覧に接続できません。接続と設定の「%s1」を確認してください。",
+  "rootfslistingempty-text": "%s0 にイメージ (.tar.gz) が見つかりません。設定の「%s1」を確認してください。"
 }

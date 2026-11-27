@@ -1,6 +1,8 @@
 // The "TurnKey Linux" create source: a plain directory listing of root
 // filesystem tarballs, read straight off a mirror's index page.
 
+import 'package:dio/dio.dart';
+
 /// The listing the TurnKey Linux source reads when Settings names no other.
 ///
 /// TurnKey's own mirror. The RWTH Aachen copy the app shipped with stopped
@@ -73,3 +75,34 @@ String rootfsDisplayName(String filename) => filename
     .replaceAll(RegExp(r'-|_'), ' ')
     .replaceAllMapped(
         RegExp(r' .|^.'), (Match m) => m[0].toString().toUpperCase());
+
+/// How long the listing may take to answer before it counts as unreachable.
+///
+/// Without a limit a mirror that accepts the connection and then says nothing
+/// left the source list loading for as long as the socket stayed open.
+const Duration rootfsListingTimeout = Duration(seconds: 20);
+
+/// What to tell the user when a listing could not be used: an i18n [key]
+/// and its [args]; the caller appends the Settings field's label as the
+/// last argument.
+class RootfsListingProblem {
+  const RootfsListingProblem(this.key, this.args);
+
+  final String key;
+  final List<String> args;
+}
+
+/// The [RootfsListingProblem] for the listing at [repo].
+///
+/// [error] is what the fetch threw, or null when the page loaded but linked
+/// no `.tar.gz` at all (an address that is not a directory listing).
+RootfsListingProblem rootfsListingProblem(Object? error, String repo) {
+  if (error == null) {
+    return RootfsListingProblem('rootfslistingempty-text', [repo]);
+  }
+  final status = error is DioException ? error.response?.statusCode : null;
+  if (status != null) {
+    return RootfsListingProblem('rootfslistinghttp-text', [repo, '$status']);
+  }
+  return RootfsListingProblem('rootfslistingunreachable-text', [repo]);
+}

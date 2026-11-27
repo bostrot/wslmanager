@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wsl2distromanager/api/rootfs_repo.dart';
 
@@ -79,6 +83,71 @@ void main() {
 
     test('keeps a link the user chose', () {
       expect(rootfsRepoLink(' $repo '), repo);
+    });
+  });
+
+  group('rootfsListingProblem', () {
+    void expectProblem(
+        RootfsListingProblem problem, String key, List<String> args) {
+      expect(problem.key, key);
+      expect(problem.args, args);
+    }
+
+    final request = RequestOptions(path: repo);
+
+    test('names the status a dead mirror answered with', () {
+      // What the RWTH Aachen mirror did from 2026 on: the raw DioException
+      // text was the whole notice.
+      final error = DioException.badResponse(
+          statusCode: 404,
+          requestOptions: request,
+          response: Response(requestOptions: request, statusCode: 404));
+      expectProblem(rootfsListingProblem(error, repo), 'rootfslistinghttp-text',
+          [repo, '404']);
+    });
+
+    test('reads a refused connection or timeout as unreachable', () {
+      for (final error in [
+        DioException.connectionError(
+            requestOptions: request,
+            reason: 'refused',
+            error: const SocketException('refused')),
+        DioException.connectionTimeout(
+            timeout: rootfsListingTimeout, requestOptions: request),
+        DioException.receiveTimeout(
+            timeout: rootfsListingTimeout, requestOptions: request),
+        ArgumentError('No host specified in URI'),
+      ]) {
+        expectProblem(rootfsListingProblem(error, repo),
+            'rootfslistingunreachable-text', [repo]);
+      }
+    });
+
+    test('reads a page without tarballs as empty', () {
+      expectProblem(
+          rootfsListingProblem(null, repo), 'rootfslistingempty-text', [repo]);
+    });
+
+    test('every locale fills each placeholder the caller passes', () {
+      // The caller appends the Settings field label, hence args + 1.
+      final cases = {
+        'rootfslistinghttp-text': 3,
+        'rootfslistingunreachable-text': 2,
+        'rootfslistingempty-text': 2,
+      };
+      for (final file in Directory('lib/i18n').listSync().whereType<File>()) {
+        final strings =
+            Map<String, dynamic>.from(jsonDecode(file.readAsStringSync()));
+        cases.forEach((key, count) {
+          final text = strings[key] as String?;
+          expect(text, isNotNull, reason: '${file.path} lacks $key');
+          for (var i = 0; i < count; i++) {
+            expect(text, contains('%s$i'), reason: '${file.path} $key');
+          }
+          expect(text, isNot(contains('%s$count')),
+              reason: '${file.path} $key');
+        });
+      }
     });
   });
 }

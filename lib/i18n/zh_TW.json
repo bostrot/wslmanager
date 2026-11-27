@@ -1412,5 +1412,8 @@
   "key-esc-text": "Esc",
   "key-home-text": "Home",
   "key-end-text": "End",
-  "key-tab-text": "Tab"
+  "key-tab-text": "Tab",
+  "rootfslistinghttp-text": "無法載入 TurnKey Linux 清單：%s0 回應了 HTTP %s1。請檢查設定中的「%s2」。",
+  "rootfslistingunreachable-text": "無法連線到位於 %s0 的 TurnKey Linux 清單。請檢查網路連線與設定中的「%s1」。",
+  "rootfslistingempty-text": "在 %s0 找不到映像檔 (.tar.gz)。請檢查設定中的「%s1」。"
 }

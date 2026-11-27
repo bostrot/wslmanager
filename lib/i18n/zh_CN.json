@@ -1412,5 +1412,8 @@
   "key-esc-text": "Esc",
   "key-home-text": "Home",
   "key-end-text": "End",
-  "key-tab-text": "Tab"
+  "key-tab-text": "Tab",
+  "rootfslistinghttp-text": "无法加载 TurnKey Linux 列表：%s0 返回了 HTTP %s1。请检查设置中的“%s2”。",
+  "rootfslistingunreachable-text": "无法访问位于 %s0 的 TurnKey Linux 列表。请检查网络连接和设置中的“%s1”。",
+  "rootfslistingempty-text": "在 %s0 未找到镜像 (.tar.gz)。请检查设置中的“%s1”。"
 }

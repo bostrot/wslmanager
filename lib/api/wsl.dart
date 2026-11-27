@@ -2275,12 +2275,24 @@ try {
     distroRootfsLinks = await App().getDistroLinks();
     // Get list of distros from custom repo link and try to format
     final scraped = <String, String>{};
+    Object? failure;
     try {
-      final response = await Dio().get<String>(repo,
-          options: Options(responseType: ResponseType.plain));
+      final response = await Dio(BaseOptions(
+              connectTimeout: rootfsListingTimeout,
+              receiveTimeout: rootfsListingTimeout))
+          .get<String>(repo,
+              options: Options(responseType: ResponseType.plain));
       scraped.addAll(parseRootfsListing(response.data ?? '', repo));
-    } catch (e) {
-      onError(e.toString());
+    } catch (e, stack) {
+      failure = e;
+      logDebug(e, stack, null);
+    }
+    // A 404 or a page without tarballs used to leave the list short with
+    // no word on why, or with Dio's own exception text as the only notice.
+    if (scraped.isEmpty) {
+      final problem = rootfsListingProblem(failure, repo);
+      onError(
+          problem.key.i18n([...problem.args, 'repofordistro-text'.i18n()]));
     }
     // A scraped directory listing is not a catalogue: the only thing that says
     // which architecture a file is built for is its name. Read through the

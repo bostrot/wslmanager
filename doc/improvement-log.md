@@ -41,9 +41,6 @@ One line per run of the daily improvement job: date · area · change · PR.
 - **`defaultRepoLink` in `constants.dart` is now unused** (the live default
   is `turnkeyRepoLink` in `lib/api/rootfs_repo.dart`). Remove it the next time
   `constants.dart` is changed by hand on purpose.
-- **Dead-source feedback.** A repo that answers 404 only shows Dio's raw
-  exception text through `Notify.message` with info severity; it deserves a
-  translated "this listing could not be read" with `severity: error`.
 - **Ctrl+E / Ctrl+I.** Not bound: no instance has an export action of its
   own (Save as template is the closest), and importing lives inside Add
   instance, which Ctrl+N already opens. Bind them if either gets a button.
@@ -52,3 +49,9 @@ One line per run of the daily improvement job: date · area · change · PR.
   missing", and that result is persisted as a confirmed `notInstalled`. An
   error message that merely names `ai-workspace` would clear a good cached
   status. Matching only `WSL_E_DISTRO_NOT_FOUND` would follow AGENTS.md.
+- **Settings check for the TurnKey address.** The same three answers
+  (`rootfsListingProblem`) could validate "Extra repo for Distros" as it is
+  saved, instead of only when the TurnKey Linux source is next opened.
+- **Mirror URLs in notices are not links.** The new TurnKey errors name the
+  address; a "Copy address" or "Open in browser" action on the InfoBar would
+  save retyping it.

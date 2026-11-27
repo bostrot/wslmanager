@@ -1411,5 +1411,8 @@
   "key-esc-text": "Esc",
   "key-home-text": "Home",
   "key-end-text": "End",
-  "key-tab-text": "Tab"
+  "key-tab-text": "Tab",
+  "rootfslistinghttp-text": "TurnKey Linux 목록을 불러올 수 없습니다: %s0이(가) HTTP %s1로 응답했습니다. 설정에서 \"%s2\"을(를) 확인하세요.",
+  "rootfslistingunreachable-text": "%s0의 TurnKey Linux 목록에 연결할 수 없습니다. 연결 상태와 설정의 \"%s1\"을(를) 확인하세요.",
+  "rootfslistingempty-text": "%s0에서 이미지(.tar.gz)를 찾을 수 없습니다. 설정에서 \"%s1\"을(를) 확인하세요."
 }

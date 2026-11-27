@@ -1411,5 +1411,8 @@
   "key-esc-text": "Esc",
   "key-home-text": "Home",
   "key-end-text": "End",
-  "key-tab-text": "Tab"
+  "key-tab-text": "Tab",
+  "rootfslistinghttp-text": "Could not load the TurnKey Linux list: %s0 answered with HTTP %s1. Check \"%s2\" in Settings.",
+  "rootfslistingunreachable-text": "Could not reach the TurnKey Linux list at %s0. Check your connection and \"%s1\" in Settings.",
+  "rootfslistingempty-text": "No images (.tar.gz) found at %s0. Check \"%s1\" in Settings."
 }
