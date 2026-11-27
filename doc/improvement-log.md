@@ -9,10 +9,11 @@ One line per run of the daily improvement job: date · area · change · PR.
 - 2026-11-24 · Bug fix · Point the TurnKey Linux source at TurnKey's own mirror (the RWTH copy 404s) and read single-quoted and absolute links · https://github.com/bostrot/wslmanager/pull/327
 - 2026-11-25 · User experience · Ctrl+F (Cmd+F on macOS) jumps to the Home instance filter, F5 reloads the list · https://github.com/bostrot/wslmanager/pull/328
 - 2026-11-25 · User experience · Default keyboard shortcuts: Ctrl+N, Ctrl+,, Ctrl+1…9, Ctrl+Tab, F1, a Ctrl+/ cheat sheet, and arrow-key selection with Enter, F2, Delete, Ctrl+D, Ctrl+Shift+T/S on Home · https://github.com/bostrot/wslmanager/pull/329
+- 2026-11-27 · Reliability · Say why the TurnKey Linux list could not load (HTTP status, unreachable, or no images) as a translated error, and time out a hung mirror after 20 s · https://github.com/bostrot/wslmanager/pull/331
 
 ## Lessons from reviews
 
-- None yet: #323 and #326 merged without review comments, and no
+- None yet: #323 and #326–#329 merged without review comments, and no
   `daily-improvement` PR has been closed unmerged.
 
 ## Ideas backlog
